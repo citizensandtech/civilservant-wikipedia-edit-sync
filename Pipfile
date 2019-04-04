@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+civilservant = "*"
+civilservant-core = {editable = true,git = "https://github.com/mitmedialab/civilservantlib-core"}
+civilservant-wikipedia = {editable = true,git = "https://github.com/mitmedialab/civilservantlib-wikipedia"}
+pyyaml = "*"
+pymysql = "*"
+mwreverts = "*"
+mwapi = "*"
+
+[requires]
+python_version = "3.7"

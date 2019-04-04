@@ -1,0 +1,12 @@
+*.pyc
+*.swp
+
+/*.egg-info
+/dist
+/build
+
+Pipfile.lock
+.env
+/lib
+
+alembic.ini
