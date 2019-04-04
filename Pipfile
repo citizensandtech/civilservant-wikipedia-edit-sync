@@ -13,6 +13,9 @@ pyyaml = "*"
 pymysql = "*"
 mwreverts = "*"
 mwapi = "*"
+jsonable = "*"
+mwtypes = "*"
+click = "*"
 
 [requires]
 python_version = "3.7"

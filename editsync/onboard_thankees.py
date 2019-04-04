@@ -1,16 +1,20 @@
 import os
+import sys
+from operator import eq
 
+import click
 import pandas as pd
 import sqlalchemy
 import yaml
 import civilservant.logs;
+from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
 
 civilservant.logs.initialize();
 import logging
 from civilservant.util import init_db_session
 
 from civilservant.wikipedia.connections.database import make_wmf_con
-from civilservant.models.wikipedia.thankees import candidates
+from civilservant.models.wikipedia.thankees import candidates, edits
 from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, WIKIPEDIA_START_DATE
 
 # from gratsample.sample_thankees import make_populations, remove_inactive_users, add_experience_bin, add_edits_fn, \
@@ -48,7 +52,7 @@ def get_active_users(lang, start_date, end_date, min_rev_id, wmf_con):
     """
     wmf_con.execute(f'use {lang}wiki_p;')
 
-    active_sql = """select user_id, user_name, user_registration, user_editcount
+    active_sql = """select :lang as lang, user_id, user_name, user_registration, user_editcount
                         from (select distinct(rev_user) from revision 
                             where rev_timestamp >= :start_date and rev_timestamp <= :end_date
                             and rev_id > :min_rev_id) active_users
@@ -56,7 +60,8 @@ def get_active_users(lang, start_date, end_date, min_rev_id, wmf_con):
     active_sql_esc = sqlalchemy.text(active_sql)
     params = {"start_date": int(to_wmftimestamp(start_date)),
               "end_date": int(to_wmftimestamp(end_date)),
-              "min_rev_id": min_rev_id}
+              "min_rev_id": min_rev_id,
+              "lang":lang}
     active_df = pd.read_sql(active_sql_esc, con=wmf_con, params=params)
     active_df['user_registration'] = active_df['user_registration'].apply(from_wmftimestamp, default=WIKIPEDIA_START_DATE)
     active_df['user_name'] = active_df['user_name'].apply(decode_or_nan)
@@ -164,10 +169,13 @@ class thankeeOnboarder():
         """
         known_users = self.db_session.query(candidates).filter(candidates.lang == lang).all()
 
+        if known_users:
+            return
+
         active_users = get_active_users(lang, start_date=self.onboarding_earliest_active_date,
-                              end_date=self.onboarding_latest_active_date,
-                              min_rev_id=self.langs[lang]['min_rev_id'],
-                              wmf_con=self.wmf_con)
+                                        end_date=self.onboarding_latest_active_date,
+                                        min_rev_id=self.langs[lang]['min_rev_id'],
+                                        wmf_con=self.wmf_con)
 
 
         active_users_min_edits = active_users[active_users['user_editcount']>=4]
@@ -178,6 +186,8 @@ class thankeeOnboarder():
         logging.info(f'candidate inserts length {len(candidate_inserts)}')
         if candidate_inserts:
             candidate_inserts_includable = self.iterative_representative_sampling(candidate_inserts)
+            self.db_session.add_all(candidate_inserts_includable)
+            self.db_session.commit()
 
 
 
@@ -192,19 +202,59 @@ class thankeeOnboarder():
         #TODO this is just a shortcut for now.
         candidate_inserts_includable = candidate_inserts[:100]
         for cand in candidate_inserts_includable:
-            cand.user_editcount_quality = get_num_quality()
+            cand.user_included = True
         return candidate_inserts_includable
+
+
+    def refresh_user_edits_comparative(self, refresh_user, lang):
+        """assumption we are only refreshing users who are known to need refresh.
+        we assume that another process calculates who needs refersh based on their edit count.
+        In additon just doing 1 `lang` at a time. So a calling function would have to loop over langs"""
+        # do this in a user-oriented way, or a process-oriented way?
+        # revisions of users
+        small_user_df = pd.DataFrame({"user_id":[refresh_user.user_id]})
+        all_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con)
+        # already received revisions
+        already_revs_res = self.db_session.query(edits).filter(edits.lang==lang).filter(edits.candidate_id==refresh_user.candidate_id).all()
+        # revisions needing getting = revs - already
+        already_revs= set([r.rev_id for r in already_revs_res])
+        live_revs = set(all_user_revs['rev_id'].values)
+        revs_to_get = live_revs.difference(already_revs)
+
+        # get and store.
+        display_data = get_display_data(list(revs_to_get), lang)
+
+        new_revs = edits(**display_data)
+        return new_revs
+
+
     def refresh_edits(self, lang):
         """
-        - update last k edits of included user
+        - update last k edits of included, not completed users
         - determine quality of edits
         - get editDisplay data
         :param user:
         :param lang:
         :return:
         """
+        logging.info("starting refresh")
+        refresh_users = self.db_session.query(candidates).filter(candidates.lang==lang).\
+                                                          filter(candidates.user_included==True).\
+                                                          filter(candidates.user_completed==False).\
+                                                          all()
 
-    def send_included_users_to_cs_hq(self):
+        logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
+        refresh_data = []
+        for refresh_user in refresh_users:
+            user_refresh_data = self.refresh_user_edits_comparative(refresh_user, lang)
+            refresh_data.append(user_refresh_data)
+
+        self.db_session.add_all(refresh_data)
+        self.db_session.commit()
+
+
+
+    def send_included_users_edits_to_cs_hq(self, lang):
         """
         - send newly included users to cs hq
         - send new editdisplay data back to cs hq
@@ -212,30 +262,43 @@ class thankeeOnboarder():
         :return:
         """
 
-    def receive_active_uncompleted_users(self):
+    def receive_active_uncompleted_users(self, lang):
         """
         - for users that are in the experiment get from backend whether they still need refreshing
         :return:
         """
 
-    def receive_users_in_thanker_experiment(self):
+    def receive_users_in_thanker_experiment(self, lang):
         """
         - may only be once , but need to know who is in the thanker expirement.
         :return:
         """
+        #TODO stopgap measure
         self.users_in_thanker_experiment = {"ar":[], "de":[], "fa":[], "pl":[]}
 
-    def run(self):
+    def run(self, fn):
         for lang in self.langs.keys():
-            self.receive_active_uncompleted_users()
-            self.receive_users_in_thanker_experiment()
-            self.sample_population(lang)
-            self.refresh_edits(lang)
-            self.send_included_users_to_cs_hq(lang)
+            if fn == "onboard":
+                self.sample_population(lang)
+            elif fn == "refresh":
+                self.refresh_edits(lang)
+            elif fn == "sync":
+                self.send_included_users_edits_to_cs_hq(lang)
+            elif fn == "run":
+                self.receive_active_uncompleted_users(lang)
+                self.receive_users_in_thanker_experiment(lang)
+                self.sample_population(lang)
+                self.refresh_edits(lang)
+                self.send_included_users_edits_to_cs_hq(lang)
 
+
+@click.command()
+@click.option("--fn", default="run", help="the portion to run")
+def run_onboard(fn):
+    config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder.yaml')
+    onboarder = thankeeOnboarder(config_file)
+    onboarder.run(fn)
 
 if __name__ == "__main__":
     logging.info("Starting Oboarder")
-    config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder.yaml')
-    onboarder = thankeeOnboarder(config_file)
-    onboarder.run()
+    run_onboard()
