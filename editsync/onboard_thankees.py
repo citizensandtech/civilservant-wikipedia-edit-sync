@@ -213,19 +213,28 @@ class thankeeOnboarder():
         # do this in a user-oriented way, or a process-oriented way?
         # revisions of users
         small_user_df = pd.DataFrame({"user_id":[refresh_user.user_id]})
-        all_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con)
+        logging.info(f"starting to get quality edits for user {refresh_user.candidate_id}")
         # already received revisions
         already_revs_res = self.db_session.query(edits).filter(edits.lang==lang).filter(edits.candidate_id==refresh_user.candidate_id).all()
-        # revisions needing getting = revs - already
         already_revs= set([r.rev_id for r in already_revs_res])
-        live_revs = set(all_user_revs['rev_id'].values)
-        revs_to_get = live_revs.difference(already_revs)
+        logging.info(f"already have {len(already_revs)} revs for user {refresh_user.candidate_id}")
+
+        new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con, exclusion_rev_ids=already_revs)
+        # revisions needing getting = revs - already
+        revs_to_get = set(new_user_revs['rev_id'].values)
 
         # get and store.
+        logging.info(f"getting display data for {len(revs_to_get)} for user {refresh_user.candidate_id}")
         display_data = get_display_data(list(revs_to_get), lang)
 
-        new_revs = edits(**display_data)
-        return new_revs
+        edits_to_add = []
+        for rev_id, display_datum in display_data.items():
+            edit_meta = {"lang":lang, "rev_id": rev_id, "candidate_id":refresh_user.candidate_id}
+            edit = {**edit_meta, **display_datum}
+            edit_to_add = edits(**edit)
+            edits_to_add.append(edit_to_add)
+
+        return edits_to_add
 
 
     def refresh_edits(self, lang):
@@ -244,13 +253,13 @@ class thankeeOnboarder():
                                                           all()
 
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
-        refresh_data = []
         for refresh_user in refresh_users:
+            refresh_data = []
             user_refresh_data = self.refresh_user_edits_comparative(refresh_user, lang)
-            refresh_data.append(user_refresh_data)
+            refresh_data.extend(user_refresh_data)
+            self.db_session.add_all(refresh_data)
+            self.db_session.commit()
 
-        self.db_session.add_all(refresh_data)
-        self.db_session.commit()
 
 
 
@@ -298,6 +307,7 @@ def run_onboard(fn):
     config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder.yaml')
     onboarder = thankeeOnboarder(config_file)
     onboarder.run(fn)
+
 
 if __name__ == "__main__":
     logging.info("Starting Oboarder")
