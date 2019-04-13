@@ -1,0 +1,40 @@
+# these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
+langs:
+  ar:
+    min_rev_id: 32457280
+    groups:
+      newcomer:
+        experience_levels:
+          - bin_0
+        user_count: 10
+      experienced:
+        experience_levels:
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 10
+  de:
+    min_rev_id: 184258647
+    groups:
+      newcomer:
+        experience_levels:
+          - bin_0
+        user_count: 10
+      experienced:
+        experience_levels:
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 10
+
+
+experiment_start_date: 2019-04-01
+
+min_edit_count: 4
+namespace_fn: non-talk

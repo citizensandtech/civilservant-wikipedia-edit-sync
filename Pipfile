@@ -16,6 +16,8 @@ mwapi = "*"
 jsonable = "*"
 mwtypes = "*"
 click = "*"
+redis = "*"
+rq = "*"
 
 [requires]
 python_version = "3.7"

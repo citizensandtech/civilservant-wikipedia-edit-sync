@@ -1,21 +1,31 @@
 import os
 import sys
+import time
 from operator import eq
 
 import click
 import pandas as pd
 import sqlalchemy
 import yaml
-import civilservant.logs;
-from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
+import civilservant.logs
+from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data, get_active_users
 
-civilservant.logs.initialize();
+from editsync.onboard_thankees_jobs import add_num_quality_user
+
+civilservant.logs.initialize()
 import logging
 from civilservant.util import init_db_session
 
 from civilservant.wikipedia.connections.database import make_wmf_con
 from civilservant.models.wikipedia.thankees import candidates, edits
-from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, WIKIPEDIA_START_DATE
+from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, \
+    WIKIPEDIA_START_DATE, get_namespace_fn
+
+from datetime import timedelta, datetime
+
+from redis import Redis
+from rq import Queue
+
 
 # from gratsample.sample_thankees import make_populations, remove_inactive_users, add_experience_bin, add_edits_fn, \
 #     remove_with_min_edit_count, add_thanks, add_has_email_currently, add_num_quality, \
@@ -27,133 +37,89 @@ from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, dec
 # import pandas as pd
 # from gratsample.cached_df import make_cached_df
 
-from datetime import timedelta, datetime
-
-
-# def sample_thankees_group_oriented(lang, db_con):
-#     """
-#         leaving this stub here because eventually i want to first start from what groups need
-#         :param lang:
-#         :param db_con:
-#         :return:
-#         """
-#     # load target group sizes
-#     # figure out which groups need more users
-#
-#     # sample active users
-#     # remove users w/ < n edits
-#     # remove editors in
-#
-# @make_cached_df('active_users')
-def get_active_users(lang, start_date, end_date, min_rev_id, wmf_con):
-    """
-    Return the first and last edits of only active users in `lang`wiki
-    between the start_date and end_date.
-    """
-    wmf_con.execute(f'use {lang}wiki_p;')
-
-    active_sql = """select :lang as lang, user_id, user_name, user_registration, user_editcount
-                        from (select distinct(rev_user) from revision 
-                            where rev_timestamp >= :start_date and rev_timestamp <= :end_date
-                            and rev_id > :min_rev_id) active_users
-                        join user on active_users.rev_user=user.user_id;"""
-    active_sql_esc = sqlalchemy.text(active_sql)
-    params = {"start_date": int(to_wmftimestamp(start_date)),
-              "end_date": int(to_wmftimestamp(end_date)),
-              "min_rev_id": min_rev_id,
-              "lang":lang}
-    active_df = pd.read_sql(active_sql_esc, con=wmf_con, params=params)
-    active_df['user_registration'] = active_df['user_registration'].apply(from_wmftimestamp, default=WIKIPEDIA_START_DATE)
-    active_df['user_name'] = active_df['user_name'].apply(decode_or_nan)
-    return active_df
-
-
-#
-#
-#
-# def make_data(subsample, wikipedia_start_date, sim_treatment_date, sim_observation_start_date, sim_experiment_end_date,
-#               wmf_con):
-#     print('starting to make data')
-#     df = make_populations(start_date=wikipedia_start_date, end_date=sim_treatment_date, wmf_con=wmf_con)
-#     df = remove_inactive_users(df, start_date=sim_observation_start_date, end_date=sim_treatment_date)
-#     if not subsample:
-#         output_bin_stats(df)
-#     df = add_experience_bin(df)
-#     print('Simulated Active Editors')
-#     print(df.groupby(['lang','experience_level_pre_treatment']).size())
-#     if subsample:
-#         print(f'make a first reasonable subsample of {10*subsample} samples per group to be able to get their edit counts beforehand')
-#         print('this wouldnt be as big of a problem live because edit count is easy to get live')
-#         df = stratified_subsampler(df, 10*subsample, newcomer_multiplier=5)
-#
-#     print('Random Stratified Subsample of active Editors to get edit counts with last 90')
-#     print(df.groupby(['lang','experience_level_pre_treatment']).size())
-#
-#     df = add_edits_fn(df, col_name='recent_edits_pre_treatment', timestamp_list_fn=len, edit_getter_fn=get_recent_edits_alias, wmf_con=wmf_con)
-#     df = remove_with_min_edit_count(df, min_edit_count=4) #  in the future remove this step by just including edit_count from the make_populations step
-#     print('Random Stratified Subsample Having min 4 edits in the last 90')
-#     print(df.groupby(['lang','experience_level_pre_treatment']).size())
-#     if subsample:
-#         print(f'subsetting to {subsample} samples')
-#         df = stratified_subsampler(df, subsample)
-#
-#     print('Second Random Stratified subsample to Get Edit Quality Data')
-#     print(df.groupby(['lang','experience_level_pre_treatment']).size())
-#
-#     print("adding thanks")
-#     df = add_thanks(df, start_date=sim_observation_start_date, end_date=sim_treatment_date,
-#                     col_name='num_prev_thanks_in_90_pre_treatment', wmf_con=wmf_con)
-#
-#     print("adding email")
-#     df = add_has_email_currently(df, wmf_con=wmf_con)
-#
-#     print("adding quality")
-#     df = add_num_quality(df, col_name='num_quality_pre_treatment', wmf_con=wmf_con, namespace_fn=namespace_all, end_date=sim_treatment_date)
-#     print("adding quality nontalk")
-#     df = add_num_quality(df, col_name='num_quality_pre_treatment_non_talk', namespace_fn=namespace_nontalk, end_date=sim_treatment_date, wmf_con=wmf_con)
-#     print("adding quality main only")
-#     df = add_num_quality(df, col_name='num_quality_pre_treatment_main_only', namespace_fn=namespace_mainonly, end_date=sim_treatment_date, wmf_con=wmf_con)
-#
-#     print('done')
-#     return df
 
 class thankeeOnboarder():
     def __init__(self, config_file):
         """groups needing edits and size N edits to be included which k edits to be displayed
         """
         config = yaml.safe_load(open(os.path.join('config', config_file), 'r'))
-        self.groups = config['groups']
+        self.config = config
         self.langs = config['langs']
+        self.min_edit_count = config['min_edit_count']
         self.wmf_con = make_wmf_con()
         self.db_session = init_db_session()
         self.experiment_start_date = config['experiment_start_date']
         self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=90)
         self.onboarding_latest_active_date = datetime.utcnow()
         self.populations = {}
+        self.namespace_fn = get_namespace_fn(config['namespace_fn'])
+        self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], }
+        self.q = Queue(name='onboarder_thankee', connection=Redis())
+        self.failed_q = Queue(name='failed', connection=Redis())
 
-    def add_update_candidate_users(self, knowns, candidates_df):
-        candidates_inserts = []
-        candidates_updates = []
+    def add_num_quality_df(self, df, lang):
+        """
+        get the number of quality users for users in the data frame, in a parallel way using rq
+        :param df:
+        :return: original dataframe with extra column the number of quality edits this user has in their last max-50 edits
+        """
 
-        # wanted to use database style joins, but i'll just use looping algos for now.
-        # knowns_user_ids = [c.user_id for c in knowns]
-        knowns_objs_dict = {c.user_id: c for c in knowns}
+        # check if this is null candidates.user_editcount_quality
+        # for those not null, enqueue job that write to database
+        # wait for queue to finish
+        # make relation and return to df
 
-        for row in candidates_df.iterrows():
-            cand = row[1].to_dict()
-            cand_user_id = cand['user_id']
-            # if the new candidates user id isn't in the knowns, we need to insert it
-            if not cand_user_id in knowns_objs_dict.keys():
-                candidates_inserts.append(candidates(**cand))
-            # if the candidate is known, they might have a new edit count
+        user_ids = df[df['lang'] == lang]['user_id'].values
+        user_to_job = []
+        for user_id in user_ids:
+            user_rec = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
+                candidates.user_id == user_id).first()
+            if user_rec:
+                if user_rec.user_editcount_quality is None:
+                    user_to_job.append(user_id)
+
+        queue_successufully_ran = False
+        while not queue_successufully_ran:
+            queue_results = []
+            for user_id in user_to_job:
+                queue_result = self.q.enqueue(f=add_num_quality_user, args=(user_id, lang, self.config['namespace_fn']))
+                queue_results.append({"user_id": user_id, "job": queue_result})
+
+            while not self.q.is_empty():
+                logging.debug(f"Queue {self.q.name} still has {self.q.count} jobs left")
+                time.sleep(10)
+                # check the failed queue and reschedule.
+
+            failed_user_ids = [queue_result['user_id'] for queue_result in queue_results if
+                               queue_result['job']._id in self.failed_q.job_ids]
+            logging.info(f"Detected failed jobs {failed_user_ids}")
+            if not failed_user_ids:
+                queue_successufully_ran = True
             else:
-                known = knowns_objs_dict[cand_user_id]
-                # if the new edit count is higher
-                if cand['user_editcount'] > known.user_editcount:
-                    known.user_editcount = cand['user_editcount']
-                    candidates_updates.append(known)
+                users_to_job = failed_user_ids
 
-        return candidates_inserts, candidates_updates
+        num_quality_dfs = []
+        for user_id in user_ids:
+            self.db_session.commit()  # sometime the db is not flushed after the queue processes add to it (not sure why? to-debug).
+            num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
+                candidates.user_id == user_id).one().user_editcount_quality
+            logging.info(f'num quality is {num_quality}')
+
+            if isinstance(num_quality, type(None)):
+                logging.warning(f"num qualit is NONE issue arises for userid {user_id}.")
+                time.sleep(30)
+                num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
+                    candidates.user_id == user_id).first().user_editcount_quality
+                logging.warning(f"re running after sleeping gave {num_quality}")
+
+            user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
+                                                          'user_id': [user_id],
+                                                          'lang': [lang]}, orient='columns')
+            num_quality_dfs.append(user_thank_count_df)
+
+        quality_counts_df = pd.concat(num_quality_dfs)
+        df = pd.merge(df, quality_counts_df, how='left', on=['lang', 'user_id'])
+        return df
 
     def sample_population(self, lang):
         """
@@ -167,29 +133,92 @@ class thankeeOnboarder():
         - add thanks history
         - add emailable status
         """
-        known_users = self.db_session.query(candidates).filter(candidates.lang == lang).all()
-
-        if known_users:
-            return
-
         active_users = get_active_users(lang, start_date=self.onboarding_earliest_active_date,
                                         end_date=self.onboarding_latest_active_date,
                                         min_rev_id=self.langs[lang]['min_rev_id'],
                                         wmf_con=self.wmf_con)
 
+        active_users_min_edits = active_users[
+            active_users['user_editcount'] >= self.min_edit_count]  # need to have at least this many edits
+        active_users_min_edits_nonthanker = active_users_min_edits[
+            active_users_min_edits["user_id"].apply(lambda uid: uid not in self.users_in_thanker_experiment[lang])]
+        active_users_min_edits_nonthanker_exp = add_experience_bin(active_users_min_edits_nonthanker,
+                                                                   self.experiment_start_date)
+        logging.info(
+            f"Group {lang} has {len(active_users_min_edits_nonthanker_exp)} active users with 4 edits in history.")
 
-        active_users_min_edits = active_users[active_users['user_editcount']>=4]
-        active_users_min_edits_nonthanker = active_users_min_edits[active_users_min_edits["user_id"].apply(lambda uid: uid not in self.users_in_thanker_experiment[lang])]
-        active_users_min_edits_nonthanker_exp = add_experience_bin(active_users_min_edits_nonthanker, self.experiment_start_date)
+        # now do group oriented checking
+        groups = self.config['langs'][lang]['groups']
+        for group_name, inclusion_criteria in groups.items():
+            logging.info(f"Working on group {lang}-{group_name}.")
+            group_experience_levels = inclusion_criteria['experience_levels']
+            target_user_count = inclusion_criteria['user_count']
 
-        candidate_inserts, candidate_updates = self.add_update_candidate_users(known_users, active_users_min_edits_nonthanker_exp)
-        logging.info(f'candidate inserts length {len(candidate_inserts)}')
-        if candidate_inserts:
-            candidate_inserts_includable = self.iterative_representative_sampling(candidate_inserts)
-            self.db_session.add_all(candidate_inserts_includable)
+            known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+                filter(candidates.user_experience_level.in_(group_experience_levels)).all()
+            logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
+
+            included_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+                filter(candidates.user_experience_level.in_(group_experience_levels)). \
+                filter(candidates.user_included == True).all()
+            logging.info(f"Group {lang}-{group_name} has {len(included_users)} included users.")
+
+            # checking if group is done
+            if len(included_users) > target_user_count:
+                logging.info(f"Group {lang}-{group_name} has enough users, nothing to do")
+                return
+
+            # subsetting active users to group criteira
+            test_size = 10
+            start_time = time.time()
+            logging.info(f"testing now for {test_size} users, time is {start_time}")
+            group_df = active_users_min_edits_nonthanker_exp[
+                active_users_min_edits_nonthanker_exp['user_experience_level'].apply(
+                    lambda ue: ue in group_experience_levels)]
+            logging.info(f"Group {lang}-{group_name} has {len(known_users)} active users min 4 edits.")
+
+            group_df = group_df[:test_size]
+            needing_saving = group_df[group_df['user_id'].apply(lambda uid: uid not in [u.user_id for u in known_users])]
+            # TODO save group df candidates to database!
+            self.df_to_db(needing_saving)
+
+            # enqueue jobs
+            group_df = self.add_num_quality_df(group_df, lang)
+            # group_df['user_editcount_quality'] = group_df.apply(lambda row: num_quality_revisions(user_id=row['user_id'], lang=lang, wmf_con=self.wmf_con, namespace_fn=self.namespace_fn), axis=1)
+            logging.info(f"finishing qual getting. elapsed: {time.time()-start_time} seconds.")
+
+            # sample down to target size and set the inclusion flag
+            logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
+            group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
+            logging.info(f"Group {lang}-{group_name} has {len(group_min_qual)} active users min 4 quality edits.")
+            logging.info(f"Randomly sampling down to inclusion of {target_user_count}")
+            if len(group_min_qual) < target_user_count:
+                logging.warning(f"Group {lang}-{group_name} has a sampling problem. {len(group_min_qual)} active "
+                                f"users min 4 quality edits and target sample size of {target_user_count}")
+            target_user_count=2 #delete this line
+            group_min_qual_incl = group_min_qual.sample(n=target_user_count)
+
+            logging.info(f"Group {lang}-{group_name} Saving {len(group_min_qual_incl)} as included.")
+            self.df_to_db_col(lang, group_min_qual_incl, 'user_included', True)
+
+
+    def df_to_db(self, df):
+        for i, row in df.iterrows():
+            self.db_session.add(candidates(lang=row['lang'],
+                                           user_id=row['user_id'],
+                                           user_name=row['user_name'],
+                                           user_registration=row['user_registration'],
+                                           user_editcount=row['user_editcount'],
+                                           user_editcount_quality=None,
+                                           user_experience_level=row['user_experience_level'], ))
             self.db_session.commit()
 
-
+    def df_to_db_col(self, lang, df, col, val):
+        for i, row in df.iterrows():
+            cand = self.db_session.query(candidates).filter(candidates.lang==lang).filter(candidates.user_id==row['user_id']).one()
+            setattr(cand, col, val)
+            self.db_session.add(cand)
+        self.db_session.commit()
 
     def iterative_representative_sampling(self, candidate_inserts):
         """
@@ -199,12 +228,7 @@ class thankeeOnboarder():
         - get and store edit quality user
         :return: includable-users
         """
-        #TODO this is just a shortcut for now.
-        candidate_inserts_includable = candidate_inserts[:100]
-        for cand in candidate_inserts_includable:
-            cand.user_included = True
-        return candidate_inserts_includable
-
+        raise NotImplementedError
 
     def refresh_user_edits_comparative(self, refresh_user, lang):
         """assumption we are only refreshing users who are known to need refresh.
@@ -212,11 +236,12 @@ class thankeeOnboarder():
         In additon just doing 1 `lang` at a time. So a calling function would have to loop over langs"""
         # do this in a user-oriented way, or a process-oriented way?
         # revisions of users
-        small_user_df = pd.DataFrame({"user_id":[refresh_user.user_id]})
+        small_user_df = pd.DataFrame({"user_id": [refresh_user.user_id]})
         logging.info(f"starting to get quality edits for user {refresh_user.candidate_id}")
         # already received revisions
-        already_revs_res = self.db_session.query(edits).filter(edits.lang==lang).filter(edits.candidate_id==refresh_user.candidate_id).all()
-        already_revs= set([r.rev_id for r in already_revs_res])
+        already_revs_res = self.db_session.query(edits).filter(edits.lang == lang).filter(
+            edits.candidate_id == refresh_user.candidate_id).all()
+        already_revs = set([r.rev_id for r in already_revs_res])
         logging.info(f"already have {len(already_revs)} revs for user {refresh_user.candidate_id}")
 
         new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con, exclusion_rev_ids=already_revs)
@@ -229,13 +254,12 @@ class thankeeOnboarder():
 
         edits_to_add = []
         for rev_id, display_datum in display_data.items():
-            edit_meta = {"lang":lang, "rev_id": rev_id, "candidate_id":refresh_user.candidate_id}
+            edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.candidate_id}
             edit = {**edit_meta, **display_datum}
             edit_to_add = edits(**edit)
             edits_to_add.append(edit_to_add)
 
         return edits_to_add
-
 
     def refresh_edits(self, lang):
         """
@@ -247,10 +271,10 @@ class thankeeOnboarder():
         :return:
         """
         logging.info("starting refresh")
-        refresh_users = self.db_session.query(candidates).filter(candidates.lang==lang).\
-                                                          filter(candidates.user_included==True).\
-                                                          filter(candidates.user_completed==False).\
-                                                          all()
+        refresh_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+            filter(candidates.user_included == True). \
+            filter(candidates.user_completed == False). \
+            all()
 
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
         for refresh_user in refresh_users:
@@ -259,9 +283,6 @@ class thankeeOnboarder():
             refresh_data.extend(user_refresh_data)
             self.db_session.add_all(refresh_data)
             self.db_session.commit()
-
-
-
 
     def send_included_users_edits_to_cs_hq(self, lang):
         """
@@ -282,8 +303,8 @@ class thankeeOnboarder():
         - may only be once , but need to know who is in the thanker expirement.
         :return:
         """
-        #TODO stopgap measure
-        self.users_in_thanker_experiment = {"ar":[], "de":[], "fa":[], "pl":[]}
+        # TODO stopgap measure
+        self.users_in_thanker_experiment[lang] = []
 
     def run(self, fn):
         for lang in self.langs.keys():
@@ -304,7 +325,7 @@ class thankeeOnboarder():
 @click.command()
 @click.option("--fn", default="run", help="the portion to run")
 def run_onboard(fn):
-    config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder.yaml')
+    config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder_thankee_test.yaml')
     onboarder = thankeeOnboarder(config_file)
     onboarder.run(fn)
 

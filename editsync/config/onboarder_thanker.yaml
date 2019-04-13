@@ -1,0 +1,13 @@
+# these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
+langs:
+  ar:
+    survey_file: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys/example/ar.csv
+  de:
+    survey_file: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys/example/de.csv
+  fa:
+    survey_file: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys/example/fa.csv
+  pl:
+    survey_file: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys/example/pl.csv
+
+merged_dir: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys/example_merged/
+experiment_start_date: 2019-04-01
