@@ -1,13 +1,11 @@
 import json
 import logging
 import os
-from unittest import mock
 from unittest.mock import patch
 import pytest
 import pandas as pd
 from civilservant.models.wikipedia.thankees import candidates
 from civilservant.util import init_db_session
-from civilservant.wikipedia.queries.revisions import get_active_users
 from editsync.onboard_thankees import thankeeOnboarder
 
 def load_path_files_to_dict(sub_dirname, filetype):
@@ -17,22 +15,6 @@ def load_path_files_to_dict(sub_dirname, filetype):
     reader = reader_fn[filetype]
     fname_file = {f: reader(f) for f in os.listdir(sub_dir) if f.endswith(filetype)}
     return fname_file
-
-@pytest.fixture
-def display_data():
-    return load_path_files_to_dict('display_data','.json')
-
-@pytest.fixture
-def mwapi_responses():
-    return load_path_files_to_dict('mwapi_responses','.json')
-
-@pytest.fixture
-def oresapi_responses():
-    return load_path_files_to_dict('ores_api_responses', '.json')
-
-@pytest.fixture
-def wmf_con_responses():
-    return load_path_files_to_dict('con_responses','.csv')
 
 @pytest.fixture
 def active_users_responses():
@@ -47,12 +29,13 @@ def db_session():
     return init_db_session()
 
 
+def clear_cands(db_session):
+    db_session.query(candidates).delete()
+
+
 def test_onboarder_config():
     onboarder = thankeeOnboarder('onboarder_thankee_test.yaml')
     assert onboarder.max_onboarders_to_check == 10
-
-def clear_cands(db_session):
-    db_session.query(candidates).delete()
 
 
 @patch('editsync.onboard_thankees.thankeeOnboarder.add_num_quality_df')
@@ -67,11 +50,6 @@ def test_onboarder_sample(mock_rev_utils, mock_add_num, db_session, active_users
                                 add_num_quality_responses['add_num_quality.de.experienced.csv'],]
     onboarder = thankeeOnboarder('onboarder_thankee_test.yaml', mock_rev_utils, db_session)
     onboarder.run('onboard')
-    # included_dfs = []
-    # for lang, group in onboarder.populations.items():
-    #     for group_name, group_df in group.items():
-    #         included_dfs.append(group_df)
-    # included_count = sum([len(df) for df in included_dfs])
     candidates_count = db_session.query(candidates).count()
     included_count = db_session.query(candidates).filter(candidates.user_included==True).count()
     # assert len(cands) == len(active_users_responses['active_users.ar.csv']) + len(active_users_responses['active_users.de.csv'])
