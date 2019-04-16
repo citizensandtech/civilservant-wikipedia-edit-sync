@@ -1,7 +1,10 @@
+import inspect
 import os
 import sys
 import time
+from collections import defaultdict
 from operator import eq
+from pathlib import Path
 
 import click
 import pandas as pd
@@ -39,23 +42,120 @@ from rq import Queue
 
 
 class thankeeOnboarder():
-    def __init__(self, config_file):
+    def __init__(self, config_file, get_active_users_replacement=None, db_session_replacement=None):
         """groups needing edits and size N edits to be included which k edits to be displayed
         """
-        config = yaml.safe_load(open(os.path.join('config', config_file), 'r'))
+        config = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', config_file), 'r'))
         self.config = config
         self.langs = config['langs']
         self.min_edit_count = config['min_edit_count']
         self.wmf_con = make_wmf_con()
-        self.db_session = init_db_session()
+        self.db_session = init_db_session() if not db_session_replacement else db_session_replacement
         self.experiment_start_date = config['experiment_start_date']
         self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=90)
         self.onboarding_latest_active_date = datetime.utcnow()
-        self.populations = {}
+        self.populations = defaultdict(dict)
         self.namespace_fn = get_namespace_fn(config['namespace_fn'])
+        self.get_active_users = get_active_users if not get_active_users_replacement else get_active_users_replacement
+
+        if 'max_onboarders_to_check' in self.config.keys():
+            self.max_onboarders_to_check = self.config['max_onboarders_to_check']
+        else:
+            self.max_onboarders_to_check = None
+
         self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], }
+
         self.q = Queue(name='onboarder_thankee', connection=Redis())
         self.failed_q = Queue(name='failed', connection=Redis())
+
+    def sample_population(self, lang):
+        """
+        - for incomplete groups:
+        - sample active users
+        - remove users with less than n edits
+        - remove editors in thanker experiment
+        - assign experience level (once only)
+        - update/insert candidates
+        - iterative representative sampling
+        - add thanks history
+        - add emailable status
+        """
+        # Get the active users
+        active_users = self.get_active_users(lang, start_date=self.onboarding_earliest_active_date,
+                                        end_date=self.onboarding_latest_active_date,
+                                        min_rev_id=self.langs[lang]['min_rev_id'],
+                                        wmf_con=self.wmf_con)
+        # active_users.to_csv(f'active_users.{lang}.csv')
+        # Subset to: - minimum edits
+        active_users_min_edits = active_users[
+            active_users['user_editcount'] >= self.min_edit_count]  # need to have at least this many edits
+        # Subset to non-thanker experiment
+        active_users_min_edits_nonthanker = active_users_min_edits[
+            active_users_min_edits["user_id"].apply(lambda uid: uid not in self.users_in_thanker_experiment[lang])]
+        # Add experience levels
+        active_users_min_edits_nonthanker_exp = add_experience_bin(active_users_min_edits_nonthanker,
+                                                                   self.experiment_start_date)
+        logging.info(
+            f"Group {lang} has {len(active_users_min_edits_nonthanker_exp)} active users with 4 edits in history.")
+
+        # Now work on groups
+        groups = self.config['langs'][lang]['groups']
+        for group_name, inclusion_criteria in groups.items():
+            self.populations[lang][group_name] = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
+                                            lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
+
+
+    def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
+        logging.info(f"Working on group {lang}-{group_name}.")
+        group_experience_levels = inclusion_criteria['experience_levels']
+        target_user_count = inclusion_criteria['user_count']
+
+        # get the known users so we don't save a candidate twice
+        known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+            filter(candidates.user_experience_level.in_(group_experience_levels)).all()
+        logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
+
+        # get the included users to know if we have enough users for this
+        included_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+            filter(candidates.user_experience_level.in_(group_experience_levels)). \
+            filter(candidates.user_included == True).all()
+        logging.info(f"Group {lang}-{group_name} has {len(included_users)} included users.")
+
+        # checking if group is done.
+        if len(included_users) > target_user_count:
+            logging.info(f"Group {lang}-{group_name} has enough users, nothing to do")
+            return
+
+        # subsetting active users to group criteira
+        group_df = super_group[
+            super_group['user_experience_level'].apply(
+                lambda ue: ue in group_experience_levels)]
+
+        # take a shortcut if it's configured
+        if self.max_onboarders_to_check:
+            group_df = group_df[:self.max_onboarders_to_check]
+
+        logging.info(f"Group {lang}-{group_name} has {len(known_users)} active users min 4 edits.")
+        needing_saving = group_df[
+            group_df['user_id'].apply(lambda uid: uid not in [u.user_id for u in known_users])]
+        self.df_to_db(needing_saving)
+
+        # enqueue jobs
+        group_df = self.add_num_quality_df(group_df, lang)
+        # group_df.to_csv(f'add_num_quality.{lang}.{group_name}.csv')
+        # sample down to target size and set the inclusion flag
+        logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
+        group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
+        logging.info(f"Group {lang}-{group_name} has {len(group_min_qual)} active users min 4 quality edits.")
+        if len(group_min_qual) < target_user_count:
+            logging.warning(f"Group {lang}-{group_name} has a sampling problem. {len(group_min_qual)} active "
+                            f"users min 4 quality edits and target sample size of {target_user_count}")
+        group_min_qual_incl = group_min_qual.sample(n=target_user_count)
+
+        logging.info(f"Group {lang}-{group_name} Saving {len(group_min_qual_incl)} as included.")
+        self.df_to_db_col(lang, group_min_qual_incl, 'user_included', True)
+        return group_min_qual_incl
+
 
     def add_num_quality_df(self, df, lang):
         """
@@ -106,7 +206,7 @@ class thankeeOnboarder():
             logging.info(f'num quality is {num_quality}')
 
             if isinstance(num_quality, type(None)):
-                logging.warning(f"num qualit is NONE issue arises for userid {user_id}.")
+                logging.warning(f"num quality is NONE issue arises for userid {user_id}.")
                 time.sleep(30)
                 num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                     candidates.user_id == user_id).first().user_editcount_quality
@@ -121,87 +221,6 @@ class thankeeOnboarder():
         df = pd.merge(df, quality_counts_df, how='left', on=['lang', 'user_id'])
         return df
 
-    def sample_population(self, lang):
-        """
-        - for incomplete groups:
-        - sample active users
-        - remove users with less than n edits
-        - remove editors in thanker experiment
-        - assign experience level (once only)
-        - update/insert candidates
-        - iterative representative sampling
-        - add thanks history
-        - add emailable status
-        """
-        active_users = get_active_users(lang, start_date=self.onboarding_earliest_active_date,
-                                        end_date=self.onboarding_latest_active_date,
-                                        min_rev_id=self.langs[lang]['min_rev_id'],
-                                        wmf_con=self.wmf_con)
-
-        active_users_min_edits = active_users[
-            active_users['user_editcount'] >= self.min_edit_count]  # need to have at least this many edits
-        active_users_min_edits_nonthanker = active_users_min_edits[
-            active_users_min_edits["user_id"].apply(lambda uid: uid not in self.users_in_thanker_experiment[lang])]
-        active_users_min_edits_nonthanker_exp = add_experience_bin(active_users_min_edits_nonthanker,
-                                                                   self.experiment_start_date)
-        logging.info(
-            f"Group {lang} has {len(active_users_min_edits_nonthanker_exp)} active users with 4 edits in history.")
-
-        # now do group oriented checking
-        groups = self.config['langs'][lang]['groups']
-        for group_name, inclusion_criteria in groups.items():
-            logging.info(f"Working on group {lang}-{group_name}.")
-            group_experience_levels = inclusion_criteria['experience_levels']
-            target_user_count = inclusion_criteria['user_count']
-
-            known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
-                filter(candidates.user_experience_level.in_(group_experience_levels)).all()
-            logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
-
-            included_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
-                filter(candidates.user_experience_level.in_(group_experience_levels)). \
-                filter(candidates.user_included == True).all()
-            logging.info(f"Group {lang}-{group_name} has {len(included_users)} included users.")
-
-            # checking if group is done
-            if len(included_users) > target_user_count:
-                logging.info(f"Group {lang}-{group_name} has enough users, nothing to do")
-                return
-
-            # subsetting active users to group criteira
-            test_size = 10
-            start_time = time.time()
-            logging.info(f"testing now for {test_size} users, time is {start_time}")
-            group_df = active_users_min_edits_nonthanker_exp[
-                active_users_min_edits_nonthanker_exp['user_experience_level'].apply(
-                    lambda ue: ue in group_experience_levels)]
-            logging.info(f"Group {lang}-{group_name} has {len(known_users)} active users min 4 edits.")
-
-            group_df = group_df[:test_size]
-            needing_saving = group_df[group_df['user_id'].apply(lambda uid: uid not in [u.user_id for u in known_users])]
-            # TODO save group df candidates to database!
-            self.df_to_db(needing_saving)
-
-            # enqueue jobs
-            group_df = self.add_num_quality_df(group_df, lang)
-            # group_df['user_editcount_quality'] = group_df.apply(lambda row: num_quality_revisions(user_id=row['user_id'], lang=lang, wmf_con=self.wmf_con, namespace_fn=self.namespace_fn), axis=1)
-            logging.info(f"finishing qual getting. elapsed: {time.time()-start_time} seconds.")
-
-            # sample down to target size and set the inclusion flag
-            logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
-            group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
-            logging.info(f"Group {lang}-{group_name} has {len(group_min_qual)} active users min 4 quality edits.")
-            logging.info(f"Randomly sampling down to inclusion of {target_user_count}")
-            if len(group_min_qual) < target_user_count:
-                logging.warning(f"Group {lang}-{group_name} has a sampling problem. {len(group_min_qual)} active "
-                                f"users min 4 quality edits and target sample size of {target_user_count}")
-            target_user_count=2 #delete this line
-            group_min_qual_incl = group_min_qual.sample(n=target_user_count)
-
-            logging.info(f"Group {lang}-{group_name} Saving {len(group_min_qual_incl)} as included.")
-            self.df_to_db_col(lang, group_min_qual_incl, 'user_included', True)
-
-
     def df_to_db(self, df):
         for i, row in df.iterrows():
             self.db_session.add(candidates(lang=row['lang'],
@@ -215,7 +234,8 @@ class thankeeOnboarder():
 
     def df_to_db_col(self, lang, df, col, val):
         for i, row in df.iterrows():
-            cand = self.db_session.query(candidates).filter(candidates.lang==lang).filter(candidates.user_id==row['user_id']).one()
+            cand = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
+                candidates.user_id == row['user_id']).one()
             setattr(cand, col, val)
             self.db_session.add(cand)
         self.db_session.commit()
