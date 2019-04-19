@@ -1,14 +1,11 @@
 import inspect
 import os
-import sys
 import time
 from collections import defaultdict
-from operator import eq
 from pathlib import Path
 
 import click
 import pandas as pd
-import sqlalchemy
 import yaml
 import civilservant.logs
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data, get_active_users
@@ -28,17 +25,6 @@ from datetime import timedelta, datetime
 
 from redis import Redis
 from rq import Queue
-
-
-# from gratsample.sample_thankees import make_populations, remove_inactive_users, add_experience_bin, add_edits_fn, \
-#     remove_with_min_edit_count, add_thanks, add_has_email_currently, add_num_quality, \
-#     stratified_subsampler
-# from gratsample.sample_thankees_revision_utils import get_recent_edits_alias
-# from gratsample.wikipedia_helpers import to_wmftimestamp, make_wmf_con, namespace_all, namespace_mainonly, namespace_nontalk
-#
-# import os
-# import pandas as pd
-# from gratsample.cached_df import make_cached_df
 
 
 class thankeeOnboarder():
