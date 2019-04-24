@@ -39,15 +39,29 @@ class thankerOnboarder():
     def make_mwapi_session(self, lang):
         return mwapi.Session(f'https://{lang}.wikipedia.org', user_agent="CivilServant thanker-onboarder <max@civilservant.io>")
 
-    def read_input_thankers(self, lang):
-        lang_users_filename = self.config['langs'][lang]['consented_file']
-        users_filename = os.path.join(self.config['dirs']['project'], self.config['dirs']['input'], lang_users_filename)
-        df = pd.read_csv(users_filename)
-        # user name normalization _takeout spaces, capitalize?
+
+    def read_user_input(self, lang, input_type):
+        survey_filename = self.config['langs'][lang][input_type]
+        survey_file = os.path.join(self.config['dirs']['project'], self.config['dirs']['input'], survey_filename)
+        df = pd.read_csv(survey_file)
         df['user_name_resp'] = df['user_name'].apply(lambda u: normalize_user_name_get_user_id_api(user_name=u, mwapi_session=self.mwapi_sessions[lang]))
         df['user_name'] = df['user_name_resp'].apply(lambda d: d['name'])
-        df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'])
+        df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'] if 'userid' in d.keys() else float('nan'))
+
+        unresolvable = df[pd.isnull(df['user_id'])]
+        if len(unresolvable) > 0:
+            self.write_output(output_dir=f'{input_type}_unresolvable', output_df_dict=None, lang=lang, fname_extra='unresolvable_ids', df_to_write=unresolvable)
+        df = df[pd.notnull(df['user_id'])]
+
         del df['user_name_resp']
+        return df
+
+    def read_survey_input(self, lang):
+        sf = self.read_user_input(lang, 'survey_file')
+        self.surveys[lang] = sf
+
+    def read_input_thankers(self, lang):
+        df = self.read_user_input(lang, 'consented_file')
         self.thankers[lang] = df
 
     def read_historical_output(self, lang):
@@ -56,16 +70,6 @@ class thankerOnboarder():
         f = max(sorted(lang_fs, key=lambda fname: datetime.datetime.strptime(fname.split('.csv')[0].split("-")[2], '%Y%m%d')))
         logging.info(f'found {len(lang_fs)} historical files for {lang}. most recent is {f}')
         self.thankers[lang] = pd.read_csv(os.path.join(self.config['dirs']['project'], self.config['dirs']['historical_output'], f))
-
-    def read_survey_input_thanker(self, lang):
-        survey_filename = self.config['langs'][lang]['survey_file']
-        survey_file = os.path.join(self.config['dirs']['project'], self.config['dirs']['input'], survey_filename)
-        sf = pd.read_csv(survey_file)
-        sf['user_name_resp'] = sf['user_name'].apply(lambda u: normalize_user_name_get_user_id_api(user_name=u, mwapi_session=self.mwapi_sessions[lang]))
-        sf['user_name'] = sf['user_name_resp'].apply(lambda d: d['name'])
-        sf['user_id'] = sf['user_name_resp'].apply(lambda d: d['userid'])
-        del sf['user_name_resp']
-        self.surveys[lang] = sf
 
 
     def add_user_basic_data(self, df, lang):
@@ -241,8 +245,9 @@ class thankerOnboarder():
     def write_merged_survey_output(self, lang):
         self.write_output(self.config['dirs']['merged_output'], self.merged, lang, "merged")
 
-    def write_output(self, output_dir, output_df_dict, lang, fname_extra):
-        out_df = output_df_dict[lang]
+    def write_output(self, output_dir, output_df_dict, lang, fname_extra, df_to_write=None):
+        out_df = output_df_dict[lang] if df_to_write is None else df_to_write
+
         out_fname = f"{lang}-{fname_extra}-{datetime.date.today().strftime('%Y%m%d')}.csv"
         out_base = os.path.join(self.config['dirs']['project'], output_dir)
         if not os.path.exists(out_base):
@@ -251,7 +256,7 @@ class thankerOnboarder():
         out_df.to_csv(out_f, index=False)
 
     def merge_historical_and_survey_data(self, lang):
-        self.merged[lang] = pd.merge(self.thankers[lang], self.surveys[lang], how="left", on='user_name')
+        self.merged[lang] = pd.merge(self.thankers[lang], self.surveys[lang], how="left", on='user_name', suffixes=("","survey"))
 
     def run(self, fn):
         for lang in self.langs:
@@ -262,7 +267,7 @@ class thankerOnboarder():
                 self.write_historical_output(lang)
             if fn == 'merge':
                 self.read_historical_output(lang)
-                self.read_survey_input_thanker(lang)
+                self.read_survey_input(lang)
                 self.merge_historical_and_survey_data(lang)
                 self.write_merged_survey_output(lang)
             if fn == 'exclude_superthankers':
