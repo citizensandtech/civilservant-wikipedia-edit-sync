@@ -81,11 +81,11 @@ class thankerOnboarder():
 
         demographics = pd.concat(users_basic_data)
 
-        df = pd.merge(df, demographics, on='user_name', suffixes=("","_basic_data"))
+        df = pd.merge(df, demographics, on=['user_name', 'lang'], suffixes=("","_basic_data"))
         return df
 
 
-    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="blocking_actions"):
+    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="blocking_actions_90_pre_treatment"):
         if start_date is None:
             start_date = WIKIPEDIA_START_DATE
         if end_date is None:
@@ -95,14 +95,14 @@ class thankerOnboarder():
         user_ban_counts = pd.DataFrame(bans.groupby(['lang', 'user_id']).size()).reset_index()
         user_ban_counts['user_id'] = user_ban_counts['user_id'].apply(int)
         logging.info(f"There are {len(user_ban_counts)} banning users.")
-        df = pd.merge(df, user_ban_counts, on='user_id', how='left').rename(columns={0: col_label})
+        df = pd.merge(df, user_ban_counts, on=['user_id', 'lang'], how='left').rename(columns={0: col_label})
         df[col_label] = df[col_label].fillna(0)
         return df
 
     def add_bots(self, df, lang):
         bots = get_official_bots(lang=lang, wmf_con=self.wmf_con)
         logging.info(f"Found {len(bots)} official bots on {lang}")
-        df = pd.merge(df, bots, on=['user_id'], how='left')
+        df = pd.merge(df, bots, on=['user_id', 'lang'], how='left')
         df['is_official_bot'] = df['is_official_bot'].fillna(False)
         return df
 
@@ -123,8 +123,7 @@ class thankerOnboarder():
             user_revert_dfs.append(user_revert_df)
 
         user_reverts = pd.concat(user_revert_dfs)
-
-        return pd.merge(df, user_reverts, on='user_id')
+        return pd.merge(df, user_reverts, on=['user_id'])
 
     def get_talk_counts(self, user_id, user_df, namespace_fn, col_label):
         talk_count = user_df['page_namespace'].apply(namespace_fn).sum()
@@ -143,14 +142,14 @@ class thankerOnboarder():
             user_talk_df = self.get_talk_counts(user_id, user_df, namespace_fn, col_label)
             talk_dfs.append(user_talk_df)
         talk_df = pd.concat(talk_dfs)
-        df = pd.merge(df, talk_df, how='left', on='user_id')
+        df = pd.merge(df, talk_df, how='left', on=['user_id'])
         return df
 
     def add_support_talk(self, df, lang):
-        return self.create_talk_df(df, namespace_fn=get_namespace_fn('talk'), lang=lang, col_label='support_talk')
+        return self.create_talk_df(df, namespace_fn=get_namespace_fn('talk'), lang=lang, col_label='support_talk_90_pre_treatment')
 
     def add_project_talk(self, df, lang):
-        return self.create_talk_df(df, namespace_fn=get_namespace_fn('project'), lang=lang, col_label='project_talk')
+        return self.create_talk_df(df, namespace_fn=get_namespace_fn('project'), lang=lang, col_label='project_talk_90_pre_treatment')
 
 
     def add_thanks(self, df, lang):
@@ -161,13 +160,13 @@ class thankerOnboarder():
                                                      start_date=self.observation_start_date,
                                                      end_date=self.experiment_start_date,
                                                      wmf_con=self.wmf_con)
-            user_thank_count_df = pd.DataFrame.from_dict({'num_thanks': [len(user_thank_df)],
+            user_thank_count_df = pd.DataFrame.from_dict({'wikithank_90_pre_treatment': [len(user_thank_df)],
                                                           'user_name': [user_name],
                                                           'lang': [lang]}, orient='columns')
             user_thank_count_dfs.append(user_thank_count_df)
 
         thank_counts_df = pd.concat(user_thank_count_dfs)
-        df = pd.merge(df, thank_counts_df, how='left', on='user_name')
+        df = pd.merge(df, thank_counts_df, how='left', on=['user_name', 'lang'])
         return df
 
     def add_wikiloves(self, df, lang):
@@ -182,13 +181,13 @@ class thankerOnboarder():
                 num_wikilove = len(user_wikilove_df)
             else:
                 num_wikilove = float('nan')
-            user_wikilove_count_df = pd.DataFrame.from_dict({'num_wikiloves': [num_wikilove],
+            user_wikilove_count_df = pd.DataFrame.from_dict({'wikilove_90_pre_treatment': [num_wikilove],
                                                           'user_id': [user_id],
                                                           'lang': [lang]}, orient='columns')
             user_wikilove_count_dfs.append(user_wikilove_count_df)
 
         wikilove_counts_df = pd.concat(user_wikilove_count_dfs)
-        df = pd.merge(df, wikilove_counts_df, how='left', on='user_id')
+        df = pd.merge(df, wikilove_counts_df, how='left', on=['user_id', 'lang'])
         return df
 
     def add_has_email(self, df, lang):
@@ -203,7 +202,7 @@ class thankerOnboarder():
                                                          'lang': [lang]}, orient='columns'))
 
         users_prop_df = pd.concat(user_prop_dfs)
-        df = pd.merge(df, users_prop_df, how='left', on='user_id')
+        df = pd.merge(df, users_prop_df, how='left', on=['user_id', 'lang'])
         return df
 
     def make_thanker_historical_data(self, lang):
@@ -245,6 +244,10 @@ class thankerOnboarder():
     def write_merged_survey_output(self, lang):
         self.write_output(self.config['dirs']['merged_output'], self.merged, lang, "merged")
 
+    def write_excluded_superthankers_output(self, lang):
+        # make individual and aggregated vergsions using mode param.
+        pd.DataFrame.to_csv()
+
     def write_output(self, output_dir, output_df_dict, lang, fname_extra, df_to_write=None):
         out_df = output_df_dict[lang] if df_to_write is None else df_to_write
 
@@ -256,7 +259,13 @@ class thankerOnboarder():
         out_df.to_csv(out_f, index=False)
 
     def merge_historical_and_survey_data(self, lang):
-        self.merged[lang] = pd.merge(self.thankers[lang], self.surveys[lang], how="left", on='user_name', suffixes=("","survey"))
+        t = self.thankers[lang]
+        s = self.surveys[lang]
+        s['lang'] = lang
+        merged_df = pd.merge(t, s, how="left", on=['user_name','lang'], suffixes=("", "__survey"))
+        qualtrics_map = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', "qualtrics_to_interal_field_map.yaml"), 'r'))
+        merged_df = merged_df.rename(columns=qualtrics_map)
+        self.merged[lang] = merged_df
 
     def run(self, fn):
         for lang in self.langs:
@@ -275,6 +284,7 @@ class thankerOnboarder():
                 self.read_superthankner_input(lang)
                 self.exclude_superthankers(lang)
                 self.write_excluded_superthankers_output(lang)
+
 
 @click.command()
 @click.option("--fn", default="historical", help="the portion to run")
