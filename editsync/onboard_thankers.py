@@ -35,6 +35,7 @@ class thankerOnboarder():
         self.thankers = {}
         self.surveys = {}
         self.merged = {}
+        self.superthankers = {}
 
     def make_mwapi_session(self, lang):
         return mwapi.Session(f'https://{lang}.wikipedia.org', user_agent="CivilServant thanker-onboarder <max@civilservant.io>")
@@ -64,13 +65,22 @@ class thankerOnboarder():
         df = self.read_user_input(lang, 'consented_file')
         self.thankers[lang] = df
 
-    def read_historical_output(self, lang):
-        hist_dir = os.listdir(os.path.join(self.config['dirs']['project'], self.config['dirs']['historical_output']))
+    def read_superthankner_input(self, lang):
+        st = self.read_user_input(lang, 'superthanker_file')
+        self.superthankers[lang] = st
+
+    def read_midstage_dir(self, lang, mistage_dir, dict_to_load):
+        hist_dir = os.listdir(os.path.join(self.config['dirs']['project'], self.config['dirs'][mistage_dir]))
         lang_fs = [f for f in hist_dir if f.startswith(lang)]
         f = max(sorted(lang_fs, key=lambda fname: datetime.datetime.strptime(fname.split('.csv')[0].split("-")[2], '%Y%m%d')))
-        logging.info(f'found {len(lang_fs)} historical files for {lang}. most recent is {f}')
-        self.thankers[lang] = pd.read_csv(os.path.join(self.config['dirs']['project'], self.config['dirs']['historical_output'], f))
+        logging.info(f'found {len(lang_fs)} {mistage_dir} files for {lang}. most recent is {f}')
+        dict_to_load[lang] = pd.read_csv(os.path.join(self.config['dirs']['project'], self.config['dirs'][mistage_dir], f))
 
+    def read_historical_output(self, lang):
+        self.read_midstage_dir(lang, mistage_dir='historical_output', dict_to_load=self.thankers)
+
+    def read_merged_survey_output(self, lang):
+        self.read_midstage_dir(lang, mistage_dir='merged_output', dict_to_load=self.merged)
 
     def add_user_basic_data(self, df, lang):
         users_basic_data = []
@@ -157,9 +167,9 @@ class thankerOnboarder():
         user_names = df['user_name'].values
         for user_name in user_names:
             user_thank_df = get_thanks_sending(lang, user_name,
-                                                     start_date=self.observation_start_date,
-                                                     end_date=self.experiment_start_date,
-                                                     wmf_con=self.wmf_con)
+                                               start_date=self.observation_start_date,
+                                               end_date=self.experiment_start_date,
+                                               wmf_con=self.wmf_con)
             user_thank_count_df = pd.DataFrame.from_dict({'wikithank_90_pre_treatment': [len(user_thank_df)],
                                                           'user_name': [user_name],
                                                           'lang': [lang]}, orient='columns')
@@ -182,8 +192,8 @@ class thankerOnboarder():
             else:
                 num_wikilove = float('nan')
             user_wikilove_count_df = pd.DataFrame.from_dict({'wikilove_90_pre_treatment': [num_wikilove],
-                                                          'user_id': [user_id],
-                                                          'lang': [lang]}, orient='columns')
+                                                             'user_id': [user_id],
+                                                             'lang': [lang]}, orient='columns')
             user_wikilove_count_dfs.append(user_wikilove_count_df)
 
         wikilove_counts_df = pd.concat(user_wikilove_count_dfs)
@@ -245,8 +255,14 @@ class thankerOnboarder():
         self.write_output(self.config['dirs']['merged_output'], self.merged, lang, "merged")
 
     def write_excluded_superthankers_output(self, lang):
-        # make individual and aggregated vergsions using mode param.
-        pd.DataFrame.to_csv()
+        self.write_output(self.config['dirs']['superthanker_merged_output'], self.merged, lang, "merged_no_superthankers")
+
+        keys_sofar = self.superthankers.keys()
+        # if we've computed every language
+        if len(keys_sofar) == len(self.langs):
+            final_df = pd.concat(self.merged.values())
+            self.write_output(output_dir=self.config['dirs']['superthanker_merged_output'], output_df_dict=None,
+                              lang='all', fname_extra='merged_no_superthankers', df_to_write=final_df)
 
     def write_output(self, output_dir, output_df_dict, lang, fname_extra, df_to_write=None):
         out_df = output_df_dict[lang] if df_to_write is None else df_to_write
@@ -266,6 +282,14 @@ class thankerOnboarder():
         qualtrics_map = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', "qualtrics_to_interal_field_map.yaml"), 'r'))
         merged_df = merged_df.rename(columns=qualtrics_map)
         self.merged[lang] = merged_df
+
+    def exclude_superthankers(self, lang):
+        merged = self.merged[lang]
+        st = self.superthankers[lang]
+        st['is_superthanker'] = True
+        merged_st = pd.merge(merged, st, how='left', on=['user_name'])
+        merged_non_st = merged_st[pd.isnull(merged_st['is_superthanker'])]
+        self.merged[lang] = merged_non_st
 
     def run(self, fn):
         for lang in self.langs:

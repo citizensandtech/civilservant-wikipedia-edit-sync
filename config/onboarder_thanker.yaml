@@ -3,20 +3,25 @@ langs:
   ar:
     consented_file: ar_consented_thankers.csv
     survey_file: ar_pre_surveys.csv
+    superthanker_file: ar_superthankers.csv
   de:
     consented_file: de_consented_thankers.csv
     survey_file: de_pre_surveys.csv
+    superthanker_file: de_superthankers.csv
   fa:
     consented_file: fa_consented_thankers.csv
     survey_file: fa_pre_surveys.csv
+    superthanker_file: fa_superthankers.csv
   pl:
     consented_file: pl_consented_thankers.csv
     survey_file: pl_pre_surveys.csv
+    superthanker_file: pl_superthankers.csv
 
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/datasets/thanker_surveys
   input: example
   historical_output: example_historical
   merged_output: example_merged
+  superthanker_merged_output: exmaple_superthanker_merged
 experiment_start_date: 2019-04-01
 observation_back_days: 84
