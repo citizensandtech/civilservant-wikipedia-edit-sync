@@ -38,7 +38,7 @@ class thankeeOnboarder():
         self.wmf_con = make_wmf_con()
         self.db_session = init_db_session() if not db_session_replacement else db_session_replacement
         self.experiment_start_date = config['experiment_start_date']
-        self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=90)
+        self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=config['observation_back_days'])
         self.onboarding_latest_active_date = datetime.utcnow()
         self.populations = defaultdict(dict)
         self.namespace_fn = get_namespace_fn(config['namespace_fn'])

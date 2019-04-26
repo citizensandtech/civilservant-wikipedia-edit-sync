@@ -67,6 +67,7 @@ langs:
 
 
 experiment_start_date: 2019-04-01
+observation_back_days: 84
 
 min_edit_count: 4
 namespace_fn: non-talk

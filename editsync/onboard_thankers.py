@@ -16,7 +16,7 @@ from civilservant.wikipedia.queries.users import normalize_user_name_get_user_id
     get_user_edits, get_official_bots
 
 import civilservant.logs
-from civilservant.wikipedia.utils import WIKIPEDIA_START_DATE, get_namespace_fn
+from civilservant.wikipedia.utils import get_namespace_fn
 
 civilservant.logs.initialize()
 import logging
@@ -95,11 +95,11 @@ class thankerOnboarder():
         return df
 
 
-    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="blocking_actions_90_pre_treatment"):
+    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="blocking_actions_84_pre_treatment"):
         if start_date is None:
-            start_date = WIKIPEDIA_START_DATE
+            start_date = self.observation_start_date
         if end_date is None:
-            end_date = datetime.datetime.utcnow()
+            end_date = self.experiment_start_date
         bans = get_bans(lang, start_date, end_date, wmf_con=self.wmf_con)
         bans = bans.rename(columns={'blocking_user_id': 'user_id'})
         user_ban_counts = pd.DataFrame(bans.groupby(['lang', 'user_id']).size()).reset_index()
@@ -156,10 +156,10 @@ class thankerOnboarder():
         return df
 
     def add_support_talk(self, df, lang):
-        return self.create_talk_df(df, namespace_fn=get_namespace_fn('talk'), lang=lang, col_label='support_talk_90_pre_treatment')
+        return self.create_talk_df(df, namespace_fn=get_namespace_fn('talk'), lang=lang, col_label='support_talk_84_pre_treatment')
 
     def add_project_talk(self, df, lang):
-        return self.create_talk_df(df, namespace_fn=get_namespace_fn('project'), lang=lang, col_label='project_talk_90_pre_treatment')
+        return self.create_talk_df(df, namespace_fn=get_namespace_fn('project'), lang=lang, col_label='project_talk_84_pre_treatment')
 
 
     def add_thanks(self, df, lang):
@@ -170,7 +170,7 @@ class thankerOnboarder():
                                                start_date=self.observation_start_date,
                                                end_date=self.experiment_start_date,
                                                wmf_con=self.wmf_con)
-            user_thank_count_df = pd.DataFrame.from_dict({'wikithank_90_pre_treatment': [len(user_thank_df)],
+            user_thank_count_df = pd.DataFrame.from_dict({'wikithank_84_pre_treatment': [len(user_thank_df)],
                                                           'user_name': [user_name],
                                                           'lang': [lang]}, orient='columns')
             user_thank_count_dfs.append(user_thank_count_df)
@@ -191,7 +191,7 @@ class thankerOnboarder():
                 num_wikilove = len(user_wikilove_df)
             else:
                 num_wikilove = float('nan')
-            user_wikilove_count_df = pd.DataFrame.from_dict({'wikilove_90_pre_treatment': [num_wikilove],
+            user_wikilove_count_df = pd.DataFrame.from_dict({'wikilove_84_pre_treatment': [num_wikilove],
                                                              'user_id': [user_id],
                                                              'lang': [lang]}, orient='columns')
             user_wikilove_count_dfs.append(user_wikilove_count_df)
@@ -218,8 +218,6 @@ class thankerOnboarder():
     def make_thanker_historical_data(self, lang):
         df = self.thankers[lang]
         logging.info("starting to get database information")
-
-
 
         logging.info('adding reverts')
         df = self.add_reverting_actions(df, lang)
