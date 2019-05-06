@@ -37,6 +37,9 @@ class thankerOnboarder():
         self.merged = {}
         self.superthankers = {}
 
+        self.qualtrics_map = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', "qualtrics_to_interal_field_map.yaml"), 'r'))
+
+
     def make_mwapi_session(self, lang):
         return mwapi.Session(f'https://{lang}.wikipedia.org', user_agent="CivilServant thanker-onboarder <max@civilservant.io>")
 
@@ -45,16 +48,24 @@ class thankerOnboarder():
         survey_filename = self.config['langs'][lang][input_type]
         survey_file = os.path.join(self.config['dirs']['project'], self.config['dirs']['input'], survey_filename)
         df = pd.read_csv(survey_file)
-        df['user_name_resp'] = df['user_name'].apply(lambda u: normalize_user_name_get_user_id_api(user_name=u, mwapi_session=self.mwapi_sessions[lang]))
-        df['user_name'] = df['user_name_resp'].apply(lambda d: d['name'])
-        df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'] if 'userid' in d.keys() else float('nan'))
+        if input_type == 'consented_file':
+            df['user_name_resp'] = df['user_name'].apply(lambda u: normalize_user_name_get_user_id_api(user_name=u, mwapi_session=self.mwapi_sessions[lang]))
+            df['user_name'] = df['user_name_resp'].apply(lambda d: d['name'])
+            df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'] if 'userid' in d.keys() else float('nan'))
 
-        unresolvable = df[pd.isnull(df['user_id'])]
-        if len(unresolvable) > 0:
-            self.write_output(output_dir=f'{input_type}_unresolvable', output_df_dict=None, lang=lang, fname_extra='unresolvable_ids', df_to_write=unresolvable)
-        df = df[pd.notnull(df['user_id'])]
+            if 'lang' not in df.columns:
+                df['lang'] = lang
 
-        del df['user_name_resp']
+            unresolvable = df[pd.isnull(df['user_id'])]
+            if len(unresolvable) > 0:
+                self.write_output(output_dir=f'{input_type}_unresolvable', output_df_dict=None, lang=lang, fname_extra='unresolvable_ids', df_to_write=unresolvable)
+
+            df = df[pd.notnull(df['user_id'])]
+
+
+            del df['user_name_resp']
+        elif input_type == 'survey_file':
+            pass
         return df
 
     def read_survey_input(self, lang):
@@ -95,7 +106,7 @@ class thankerOnboarder():
         return df
 
 
-    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="blocking_actions_84_pre_treatment"):
+    def add_blocks(self, df, lang, start_date=None, end_date=None, col_label="block_actions_84_pre_treatment"):
         if start_date is None:
             start_date = self.observation_start_date
         if end_date is None:
@@ -114,26 +125,25 @@ class thankerOnboarder():
         logging.info(f"Found {len(bots)} official bots on {lang}")
         df = pd.merge(df, bots, on=['user_id', 'lang'], how='left')
         df['is_official_bot'] = df['is_official_bot'].fillna(False)
+        df['is_official_bot'] = df['is_official_bot'].apply(bool)
         return df
 
 
     def add_reverting_actions(self, df, lang):
         user_revert_dfs = []
+        schema = mwdb.Schema(f"mysql+pymysql://{os.getenv('WMF_MYSQL_HOST')}:{os.getenv('WMF_MYSQL_PORT')}/{lang}wiki_p?read_default_file=~/replica.my.cnf",
+                             only_tables=['revision'], pool_size=9, max_overflow=0)
         for user_id in df['user_id'].values:
             user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
             rev_ids = user_df['rev_id'].values
             #TODO  undo this limitation when we're really in production
-            rev_ids = rev_ids[:100] #TOD
-            # schema = mwdb.Schema(f"mysql+pymysql://{lang}wiki.labsdb/{lang}wiki_p?read_default_file=~/replica.my.cnf",
-            #            only_tables=['revision'])
-            schema = mwdb.Schema(f"mysql+pymysql://{os.getenv('WMF_MYSQL_HOST')}:{os.getenv('WMF_MYSQL_PORT')}/{lang}wiki_p?read_default_file=~/replica.my.cnf",
-                                 only_tables=['revision'])
+            # rev_ids = rev_ids[:100]
             logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
             user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
             user_revert_dfs.append(user_revert_df)
 
         user_reverts = pd.concat(user_revert_dfs)
-        return pd.merge(df, user_reverts, on=['user_id'])
+        return pd.merge(df, user_reverts, on=['user_id', 'lang'])
 
     def get_talk_counts(self, user_id, user_df, namespace_fn, col_label):
         talk_count = user_df['page_namespace'].apply(namespace_fn).sum()
@@ -219,6 +229,9 @@ class thankerOnboarder():
         df = self.thankers[lang]
         logging.info("starting to get database information")
 
+        logging.info('adding bots')
+        df = self.add_bots(df, lang)
+
         logging.info('adding reverts')
         df = self.add_reverting_actions(df, lang)
 
@@ -227,9 +240,6 @@ class thankerOnboarder():
 
         logging.info('adding wikiloves')
         df = self.add_wikiloves(df, lang)
-
-        logging.info('adding bots')
-        df = self.add_bots(df, lang)
 
         logging.info('adding blocks')
         df = self.add_blocks(df, lang)
@@ -259,6 +269,21 @@ class thankerOnboarder():
         # if we've computed every language
         if len(keys_sofar) == len(self.langs):
             final_df = pd.concat(self.merged.values())
+            # TODO make this prettier
+            final_cols = ['user_name',
+                          'anonymized_id',
+                          'user_id',
+                           'num_reverts_84_pre_treatment',
+                            'wikithank_84_pre_treatment',
+                            'wikilove_84_pre_treatment',
+                            'is_official_bot',
+                            'blocking_actions_84_pre_treatment',
+                            'project_talk_84_pre_treatment',
+                            'support_talk_84_pre_treatment',
+                            'has_email',
+                            ]
+            final_cols.extend(self.qualtrics_map.values())
+            final_df = final_df[final_cols]
             self.write_output(output_dir=self.config['dirs']['superthanker_merged_output'], output_df_dict=None,
                               lang='all', fname_extra='merged_no_superthankers', df_to_write=final_df)
 
@@ -276,16 +301,15 @@ class thankerOnboarder():
         t = self.thankers[lang]
         s = self.surveys[lang]
         s['lang'] = lang
-        merged_df = pd.merge(t, s, how="left", on=['user_name','lang'], suffixes=("", "__survey"))
-        qualtrics_map = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', "qualtrics_to_interal_field_map.yaml"), 'r'))
-        merged_df = merged_df.rename(columns=qualtrics_map)
+        merged_df = pd.merge(t, s, how="left", on=['ID'], suffixes=("", "__survey"))
+        merged_df = merged_df.rename(columns=self.qualtrics_map)
         self.merged[lang] = merged_df
 
     def exclude_superthankers(self, lang):
         merged = self.merged[lang]
         st = self.superthankers[lang]
         st['is_superthanker'] = True
-        merged_st = pd.merge(merged, st, how='left', on=['user_name'])
+        merged_st = pd.merge(merged, st, how='left', on=['user_name', 'lang'])
         merged_non_st = merged_st[pd.isnull(merged_st['is_superthanker'])]
         self.merged[lang] = merged_non_st
 

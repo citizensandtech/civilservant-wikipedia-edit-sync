@@ -1,7 +1,7 @@
 """create candidates and edits
 
 Revision ID: 63b0eaddb3ab
-Revises: 
+Revises:
 Create Date: 2019-04-15 17:04:40.717007
 
 """
@@ -29,7 +29,8 @@ def upgrade():
     sa.Column('user_editcount_quality', sa.Integer(), nullable=True),
     sa.Column('user_experience_level', mysql.TINYTEXT(), nullable=True),
     sa.Column('thanks_sent', sa.Integer(), nullable=True),
-    sa.Column('thanks_received', sa.Integer(), nullable=True),
+    sa.Column('num_prev_thanks', sa.Integer(), nullable=True),
+    sa.Column('num_prev_thanks_90', sa.Integer(), nullable=True),
     sa.Column('has_email', sa.Boolean(), nullable=True),
     sa.Column('user_completed', sa.Boolean(), nullable=True),
     sa.Column('user_included', sa.Boolean(), nullable=True),

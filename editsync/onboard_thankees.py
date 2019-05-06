@@ -8,13 +8,14 @@ import click
 import pandas as pd
 import yaml
 import civilservant.logs
-from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data, get_active_users
-
-from editsync.onboard_thankees_jobs import add_num_quality_user
+from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
+from civilservant.wikipedia.queries.users import get_active_users
+from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving
 
 civilservant.logs.initialize()
 import logging
-from civilservant.util import init_db_session
+from civilservant.db import init_session
+import civilservant.models.core
 
 from civilservant.wikipedia.connections.database import make_wmf_con
 from civilservant.models.wikipedia.thankees import candidates, edits
@@ -36,7 +37,7 @@ class thankeeOnboarder():
         self.langs = config['langs']
         self.min_edit_count = config['min_edit_count']
         self.wmf_con = make_wmf_con()
-        self.db_session = init_db_session() if not db_session_replacement else db_session_replacement
+        self.db_session = init_session() if not db_session_replacement else db_session_replacement
         self.experiment_start_date = config['experiment_start_date']
         self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=config['observation_back_days'])
         self.onboarding_latest_active_date = datetime.utcnow()
@@ -87,8 +88,40 @@ class thankeeOnboarder():
         # Now work on groups
         groups = self.config['langs'][lang]['groups']
         for group_name, inclusion_criteria in groups.items():
-            self.populations[lang][group_name] = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
+            df = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
                                             lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
+
+
+            ## Nota Bene. This is where things ge a bit wonky.
+            # 1. at first I thought that I would store the user state in a candidates table, and in fact
+            # that is useful for the sake of being able to multiprocess the quality-edits revision
+            # however it is a pain to update columns in the grow-only right pandas-style, which the rest of the
+            # independent variables. in addition since we aren't onboarding in a rolling-state, but once every
+            # active-window-days, we don't really need to store the state to compare it. at ths point in collecting
+            # data we switch to the pandas style and keep the user state is a dict of data frames "population".
+            # So todo: reconcile the two ways to store state.
+            # add previous thanks received last 90 /84
+
+            df['user_included'] = True
+            self.df_to_db_col(lang, df, 'user_included')
+
+            logging.info(f'adding email df')
+
+            df = add_has_email(df, lang, self.wmf_con)
+            self.df_to_db_col(lang, df, 'has_email')
+
+            # add previous thanks
+            df = add_thanks_receiving(df, lang,
+                                      start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
+                                      wmf_con=self.wmf_con, col_label='num_prev_thanks')
+            self.df_to_db_col(lang, df, 'num_prev_thanks')
+
+            df = add_thanks_receiving(df, lang,
+                                      start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
+                                      wmf_con=self.wmf_con, col_label='num_prev_thanks_90')
+            self.df_to_db_col(lang, df, 'num_prev_thanks_90')
+
+            self.populations[lang][group_name] = df
 
 
     def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
@@ -102,15 +135,16 @@ class thankeeOnboarder():
         logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
 
         # get the included users to know if we have enough users for this
-        included_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+        included_users_q = self.db_session.query(candidates).filter(candidates.lang == lang). \
             filter(candidates.user_experience_level.in_(group_experience_levels)). \
-            filter(candidates.user_included == True).all()
+            filter(candidates.user_included == True)
+        included_users = included_users_q.all()
         logging.info(f"Group {lang}-{group_name} has {len(included_users)} included users.")
 
         # checking if group is done.
         if len(included_users) > target_user_count:
             logging.info(f"Group {lang}-{group_name} has enough users, nothing to do")
-            return
+            return pd.read_sql(included_users_q.statement, included_users_q.session.bind)
 
         # subsetting active users to group criteira
         group_df = super_group[
@@ -139,7 +173,6 @@ class thankeeOnboarder():
         group_min_qual_incl = group_min_qual.sample(n=target_user_count)
 
         logging.info(f"Group {lang}-{group_name} Saving {len(group_min_qual_incl)} as included.")
-        self.df_to_db_col(lang, group_min_qual_incl, 'user_included', True)
         return group_min_qual_incl
 
 
@@ -191,13 +224,6 @@ class thankeeOnboarder():
                 candidates.user_id == user_id).one().user_editcount_quality
             logging.info(f'num quality is {num_quality}')
 
-            if isinstance(num_quality, type(None)):
-                logging.warning(f"num quality is NONE issue arises for userid {user_id}.")
-                time.sleep(30)
-                num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
-                    candidates.user_id == user_id).first().user_editcount_quality
-                logging.warning(f"re running after sleeping gave {num_quality}")
-
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
                                                           'lang': [lang]}, orient='columns')
@@ -218,11 +244,13 @@ class thankeeOnboarder():
                                            user_experience_level=row['user_experience_level'], ))
             self.db_session.commit()
 
-    def df_to_db_col(self, lang, df, col, val):
+    def df_to_db_col(self, lang, df, col):
         for i, row in df.iterrows():
             cand = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == row['user_id']).one()
+            val = row[col]
             setattr(cand, col, val)
+            logging.info(f"value {val} set on {col}, for {cand}")
             self.db_session.add(cand)
         self.db_session.commit()
 
@@ -290,6 +318,22 @@ class thankeeOnboarder():
             self.db_session.add_all(refresh_data)
             self.db_session.commit()
 
+    def output_population(self, lang):
+        # if we've processed evry lang
+        if len(self.populations.keys()) == len(self.langs.keys()):
+            dfs = []
+            for lang, groups in self.populations.items():
+                for group_name, group_df in groups.items():
+                    dfs.append(group_df)
+
+            out_df = pd.concat(dfs)
+            out_fname = f"all-thankees-historical-{datetime.date.today().strftime('%Y%m%d')}.csv"
+            out_base = os.path.join(self.config['dirs']['project'], self.config['dirs']['output'])
+            if not os.path.exists(out_base):
+                os.makedirs(out_base, exist_ok=True)
+            out_f = os.path.join(out_base, out_fname)
+            out_df.to_csv(out_f, index=False)
+
     def send_included_users_edits_to_cs_hq(self, lang):
         """
         - send newly included users to cs hq
@@ -316,6 +360,7 @@ class thankeeOnboarder():
         for lang in self.langs.keys():
             if fn == "onboard":
                 self.sample_population(lang)
+                self.output_population(lang)
             elif fn == "refresh":
                 self.refresh_edits(lang)
             elif fn == "sync":
