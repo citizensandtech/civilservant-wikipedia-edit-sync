@@ -33,63 +33,54 @@ class randomizationUploader():
         self.randomizations_f = os.path.join(self.config['project_dir'], self.config['randomizations_dir'], self.config['randomizations_file'])
         self.df = pd.read_csv(self.randomizations_f)
 
-    def upload(self):
+    def upload(self, cols_to_save):
+        self.ets_to_add = []
         for i, row in self.df.iterrows():
             row = row.fillna(0)
-            row_dict = {'user_name': row['user_name'],
-                        'anonymized_id': row['anonymized_id'],
-                        'user_id': row['user_id'],
-                        'num_reverts_84_pre_treatment': row['num_reverts_84_pre_treatment'],
-                        'wikithank_84_pre_treatment': row['wikithank_84_pre_treatment'],
-                        'wikilove_84_pre_treatment': row['wikilove_84_pre_treatment'],
-                        'is_official_bot': row['is_official_bot'],
-                        'block_actions_84_pre_treatment': row['block_actions_84_pre_treatment'],
-                        'project_talk_84_pre_treatment': row['project_talk_84_pre_treatment'],
-                        'support_talk_84_pre_treatment': row['support_talk_84_pre_treatment'],
-                        'has_email': row['has_email'],
-                        'pre_newcomer_capability': row['pre_newcomer_capability'],
-                        'pre_newcomer_intent': row['pre_newcomer_intent'],
-                        'pre_emotionally_draining': row['pre_emotionally_draining'],
-                        'pre_feel_positive': row['pre_feel_positive'],
-                        'pre_monitoring_damaging_content': row['pre_monitoring_damaging_content'],
-                        'pre_mentoring': row['pre_mentoring'],
-                        'lang': row['lang'],
-                        'supportive_84_pre_treatment': row['supportive_84_pre_treatment'],
-                        'protective_84_pre_treatment': row['protective_84_pre_treatment'],
-                        'randomization_protectiveness_index': row['randomization_protectiveness_index'],
-                        'randomization_block_id': row['randomization_block_id'],
-                        'randomization_block_size': row['randomization_block_size']}
-
-            et = ExperimentThing(
-                            id=f'{row["lang"]}:{row["user_id"]}]',
-                            thing_id=row['anonymized_id'],
-                            experiment_id = -1,
-                            randomization_condition = 'main',
-                            randomization_arm = row['randomization_arm'],
-                            object_platform = PlatformType.WIKIPEDIA,
-                            object_type = ThingType.WIKIPEDIA_USER,
-                            object_created_dt = None,
-                            query_index = None,
-                            syncable = True,
-                            synced_dt = None,
-                            metadata_json = row_dict)
-            self.db_session.add(et)
+            row_map = {c: row[c] for c in cols_to_save}
+            id = f'{row["lang"]}:{row["user_id"]}'
+            logging.info(f'attempting id {id}')
+            existing_id_record = self.db_session.query(ExperimentThing).filter(ExperimentThing.id==id).one_or_none()
+            if existing_id_record:
+                continue
+            else:
+                et = ExperimentThing(
+                                id=id,
+                                thing_id=row['anonymized_id'],
+                                experiment_id = -1,
+                                randomization_condition = 'main',
+                                randomization_arm = row['randomization_arm'],
+                                object_platform = PlatformType.WIKIPEDIA,
+                                object_type = ThingType.WIKIPEDIA_USER,
+                                object_created_dt = None,
+                                query_index = None,
+                                syncable = True,
+                                synced_dt = None,
+                                metadata_json = row_map)
+                self.ets_to_add.append(et)
+            self.db_session.add_all(self.ets_to_add)
             self.db_session.commit()
 
             # except (sqlalchemy.exc.OperationalError, sqlalchemy.exc.IntegrityError):
             #     logging.info(f"error row: {row}")
-            #     logging.info(row_dict)
+            #     logging.info(row_map)
             #     self.db_session.rollback()
 
     def confirm_upload(self):
         curr_num_experiment_things = self.num_experiment_things()
-        assert self.inital_num_experiment_things + len(self.df) == curr_num_experiment_things
+        assert self.inital_num_experiment_things + len(self.ets_to_add) == curr_num_experiment_things
 
 
     def run(self, fn):
         if fn == 'thankers':
+            cols_to_save = self.config['cols_to_save']['thankers']
             self.read_input()
-            self.upload()
+            self.upload(cols_to_save)
+            self.confirm_upload()
+        if fn == 'thankees':
+            cols_to_save = self.config['cols_to_save']['thankees']
+            self.read_input()
+            self.upload(cols_to_save)
             self.confirm_upload()
 
 
