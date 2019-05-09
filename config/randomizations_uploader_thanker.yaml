@@ -8,7 +8,6 @@ csv_db_map:
 
 
 cols_to_save:
-  thankers:
     - user_name
     - anonymized_id
     - user_id

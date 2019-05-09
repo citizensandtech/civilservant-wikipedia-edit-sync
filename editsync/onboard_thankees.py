@@ -22,7 +22,7 @@ from civilservant.models.wikipedia.thankees import candidates, edits
 from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, \
     WIKIPEDIA_START_DATE, get_namespace_fn
 
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
 
 from redis import Redis
 from rq import Queue
@@ -107,21 +107,27 @@ class thankeeOnboarder():
 
             logging.info(f'adding email df')
 
-            df = add_has_email(df, lang, self.wmf_con)
-            self.df_to_db_col(lang, df, 'has_email')
+            if 'has_email' not in df.columns:
+                #refereshing con here, sometimes gets stale after waiting
+                self.wmf_con = make_wmf_con()
+                df = add_has_email(df, lang, self.wmf_con)
+                self.df_to_db_col(lang, df, 'has_email')
 
             # add previous thanks
-            df = add_thanks_receiving(df, lang,
-                                      start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
-                                      wmf_con=self.wmf_con, col_label='num_prev_thanks')
-            self.df_to_db_col(lang, df, 'num_prev_thanks')
+            npt = 'num_prev_thanks'
+            npt90 = 'num_prev_thanks_90'
 
-            df = add_thanks_receiving(df, lang,
-                                      start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
-                                      wmf_con=self.wmf_con, col_label='num_prev_thanks_90')
-            self.df_to_db_col(lang, df, 'num_prev_thanks_90')
+            if npt not in df.columns:
+                df = add_thanks_receiving(df, lang,
+                                          start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
+                                          wmf_con=self.wmf_con, col_label='num_prev_thanks')
+                self.df_to_db_col(lang, df, 'num_prev_thanks')
 
-            self.populations[lang][group_name] = df
+            if npt90 not in df.columns:
+                df = add_thanks_receiving(df, lang,
+                                          start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
+                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_90')
+                self.df_to_db_col(lang, df, 'num_prev_thanks_90')
 
 
     def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
@@ -217,12 +223,13 @@ class thankeeOnboarder():
             else:
                 users_to_job = failed_user_ids
 
+        # add num_quality back into the dataframe
         num_quality_dfs = []
         for user_id in user_ids:
             self.db_session.commit()  # sometime the db is not flushed after the queue processes add to it (not sure why? to-debug).
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).one().user_editcount_quality
-            logging.info(f'num quality is {num_quality}')
+            # logging.info(f'num quality is {num_quality}')
 
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
@@ -250,7 +257,7 @@ class thankeeOnboarder():
                 candidates.user_id == row['user_id']).one()
             val = row[col]
             setattr(cand, col, val)
-            logging.info(f"value {val} set on {col}, for {cand}")
+            # logging.info(f"value {val} set on {col}, for {cand}")
             self.db_session.add(cand)
         self.db_session.commit()
 
@@ -318,21 +325,19 @@ class thankeeOnboarder():
             self.db_session.add_all(refresh_data)
             self.db_session.commit()
 
-    def output_population(self, lang):
-        # if we've processed evry lang
-        if len(self.populations.keys()) == len(self.langs.keys()):
-            dfs = []
-            for lang, groups in self.populations.items():
-                for group_name, group_df in groups.items():
-                    dfs.append(group_df)
+    def output_population(self):
+        # if we've processed every lang
+        out_fname = f"all-thankees-historical-{date.today().strftime('%Y%m%d')}.csv"
+        out_base = os.path.join(self.config['dirs']['project'], self.config['dirs']['output'])
+        if not os.path.exists(out_base):
+            os.makedirs(out_base, exist_ok=True)
+        out_f = os.path.join(out_base, out_fname)
 
-            out_df = pd.concat(dfs)
-            out_fname = f"all-thankees-historical-{datetime.date.today().strftime('%Y%m%d')}.csv"
-            out_base = os.path.join(self.config['dirs']['project'], self.config['dirs']['output'])
-            if not os.path.exists(out_base):
-                os.makedirs(out_base, exist_ok=True)
-            out_f = os.path.join(out_base, out_fname)
-            out_df.to_csv(out_f, index=False)
+        # now doing it the sqlalchemy way
+        all_included_users = self.db_session.query(candidates).filter(candidates.user_included==True)
+        out_df = pd.read_sql(all_included_users.statement, all_included_users.session.bind)
+        logging.info(f"outputted data to: {out_f}")
+        out_df.to_csv(out_f, index=False)
 
     def send_included_users_edits_to_cs_hq(self, lang):
         """
@@ -354,13 +359,24 @@ class thankeeOnboarder():
         :return:
         """
         # TODO stopgap measure
-        self.users_in_thanker_experiment[lang] = []
+        thankers_d = os.path.join(self.config['dirs']['project'], self.config['dirs']['thankers'])
+        thankers_ls = os.listdir(thankers_d)
+        thankers_ls_lang = [f for f in thankers_ls if f.startswith(lang)]
+        try:
+            thankers_f = os.path.join(self.config['dirs']['project'], self.config['dirs']['thankers'], thankers_ls_lang[0])
+            thankers = pd.read_csv(thankers_f)
+            thankers_lang = thankers[thankers['lang']==lang]
+            self.users_in_thanker_experiment[lang] = thankers_lang['user_id'].values
+            logging.info(f'loaded {len(self.users_in_thanker_experiment[lang])} thankers')
+        except IndexError:
+            logging.warning(f"No thankers found to load in {self.config['dirs']['thankers']}")
 
     def run(self, fn):
+        # lang loop stage
         for lang in self.langs.keys():
             if fn == "onboard":
+                self.receive_users_in_thanker_experiment(lang)
                 self.sample_population(lang)
-                self.output_population(lang)
             elif fn == "refresh":
                 self.refresh_edits(lang)
             elif fn == "sync":
@@ -371,13 +387,16 @@ class thankeeOnboarder():
                 self.sample_population(lang)
                 self.refresh_edits(lang)
                 self.send_included_users_edits_to_cs_hq(lang)
+        # final stage
+        if fn == 'onboard':
+            self.output_population()
 
 
 @click.command()
 @click.option("--fn", default="run", help="the portion to run")
-def run_onboard(fn):
-    config_file = os.getenv('ONBOARDER_CONFIG', 'onboarder_thankee_test.yaml')
-    onboarder = thankeeOnboarder(config_file)
+@click.option("--config", default="onboarder_thankee_test.yaml", help="the config file to use")
+def run_onboard(fn, config):
+    onboarder = thankeeOnboarder(config)
     onboarder.run(fn)
 
 

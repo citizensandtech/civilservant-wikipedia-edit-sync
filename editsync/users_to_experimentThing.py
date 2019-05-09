@@ -29,7 +29,7 @@ class randomizationUploader():
         return self.db_session.query(ExperimentThing).count()
 
 
-    def read_input(self):
+    def read_input(self, user):
         self.randomizations_f = os.path.join(self.config['project_dir'], self.config['randomizations_dir'], self.config['randomizations_file'])
         self.df = pd.read_csv(self.randomizations_f)
 
@@ -86,7 +86,7 @@ class randomizationUploader():
 
 @click.command()
 @click.option("--fn", default="thankers", help="the portion to run")
-@click.option('--config', default="randomizations_uploader.yaml", help='the config file to use')
+@click.option('--config', default="randomizations_uploader_thanker.yaml", help='the config file to use')
 def run_onboard(fn, config):
     # config_file = os.getenv('ONBOARDER_CONFIG', config)
     uploader = randomizationUploader(config, fn)
