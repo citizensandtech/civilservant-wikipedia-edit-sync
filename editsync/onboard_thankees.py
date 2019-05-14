@@ -10,7 +10,7 @@ import yaml
 import civilservant.logs
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
 from civilservant.wikipedia.queries.users import get_active_users
-from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving
+from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 
 civilservant.logs.initialize()
 import logging
@@ -66,6 +66,7 @@ class thankeeOnboarder():
         - iterative representative sampling
         - add thanks history
         - add emailable status
+        - add labour hours
         """
         # Get the active users
         active_users = self.get_active_users(lang, start_date=self.onboarding_earliest_active_date,
@@ -89,7 +90,7 @@ class thankeeOnboarder():
         groups = self.config['langs'][lang]['groups']
         for group_name, inclusion_criteria in groups.items():
             df = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
-                                            lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
+                                                 lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
 
 
             ## Nota Bene. This is where things ge a bit wonky.
@@ -105,29 +106,26 @@ class thankeeOnboarder():
             df['user_included'] = True
             self.df_to_db_col(lang, df, 'user_included')
 
-            logging.info(f'adding email df')
+            # refereshing con here, sometimes gets stale after waiting
+            self.wmf_con = make_wmf_con()
 
+            logging.info('adding labour hours')
+            if "labor_hours_84_days_pre_sample" not in df.columns:
+                df = add_labour_hours(df, lang,
+                                      start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
+                                      wmf_con=self.wmf_con, col_label="labor_hours_84_days_pre_sample")
+                self.df_to_db_col(lang, df, 'labor_hours_84_days_pre_sample')
+
+            logging.info(f'adding email df')
             if 'has_email' not in df.columns:
-                #refereshing con here, sometimes gets stale after waiting
-                self.wmf_con = make_wmf_con()
                 df = add_has_email(df, lang, self.wmf_con)
                 self.df_to_db_col(lang, df, 'has_email')
 
-            # add previous thanks
-            npt = 'num_prev_thanks'
-            npt90 = 'num_prev_thanks_90'
-
-            if npt not in df.columns:
+            if "num_prev_thanks_pre_sample" not in df.columns:
                 df = add_thanks_receiving(df, lang,
                                           start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
-                                          wmf_con=self.wmf_con, col_label='num_prev_thanks')
-                self.df_to_db_col(lang, df, 'num_prev_thanks')
-
-            if npt90 not in df.columns:
-                df = add_thanks_receiving(df, lang,
-                                          start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
-                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_90')
-                self.df_to_db_col(lang, df, 'num_prev_thanks_90')
+                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
+                self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
 
 
     def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
