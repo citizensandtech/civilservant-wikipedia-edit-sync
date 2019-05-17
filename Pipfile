@@ -18,6 +18,7 @@ mwtypes = "*"
 click = "*"
 redis = "*"
 rq = "*"
+pandas = "*"
 
 [requires]
 python_version = "3.7"
