@@ -92,7 +92,6 @@ class thankeeOnboarder():
             df = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
                                                  lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
 
-
             ## Nota Bene. This is where things ge a bit wonky.
             # 1. at first I thought that I would store the user state in a candidates table, and in fact
             # that is useful for the sake of being able to multiprocess the quality-edits revision
@@ -103,11 +102,9 @@ class thankeeOnboarder():
             # So todo: reconcile the two ways to store state.
             # add previous thanks received last 90 /84
 
-            df['user_included'] = True
-            self.df_to_db_col(lang, df, 'user_included')
-
             # refereshing con here, sometimes gets stale after waiting
             self.wmf_con = make_wmf_con()
+            self.db_session = init_session()
 
             logging.info('adding labour hours')
             if "labor_hours_84_days_pre_sample" not in df.columns:
@@ -126,6 +123,9 @@ class thankeeOnboarder():
                                           start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
                                           wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
                 self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
+
+            df['user_included'] = True
+            self.df_to_db_col(lang, df, 'user_included')
 
 
     def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
@@ -146,7 +146,7 @@ class thankeeOnboarder():
         logging.info(f"Group {lang}-{group_name} has {len(included_users)} included users.")
 
         # checking if group is done.
-        if len(included_users) > target_user_count:
+        if len(included_users) >= target_user_count:
             logging.info(f"Group {lang}-{group_name} has enough users, nothing to do")
             return pd.read_sql(included_users_q.statement, included_users_q.session.bind)
 
@@ -224,7 +224,6 @@ class thankeeOnboarder():
         # add num_quality back into the dataframe
         num_quality_dfs = []
         for user_id in user_ids:
-            self.db_session.commit()  # sometime the db is not flushed after the queue processes add to it (not sure why? to-debug).
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).one().user_editcount_quality
             # logging.info(f'num quality is {num_quality}')
