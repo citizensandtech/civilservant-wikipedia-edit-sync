@@ -10,7 +10,8 @@ import yaml
 import civilservant.logs
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
 from civilservant.wikipedia.queries.users import get_active_users
-from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
+# from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
+from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 
 civilservant.logs.initialize()
 import logging
