@@ -119,12 +119,14 @@ class thankeeOnboarder():
                 df = add_has_email(df, lang, self.wmf_con)
                 self.df_to_db_col(lang, df, 'has_email')
 
+            logging.info(f'adding nump prev_thanks_pre_sample')
             if "num_prev_thanks_pre_sample" not in df.columns:
                 df = add_thanks_receiving(df, lang,
                                           start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
                                           wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
                 self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
 
+            logging.info(f"Group {lang}-{group_name} Saving {len(df)} as included.")
             df['user_included'] = True
             self.df_to_db_col(lang, df, 'user_included')
 
@@ -175,9 +177,9 @@ class thankeeOnboarder():
         if len(group_min_qual) < target_user_count:
             logging.warning(f"Group {lang}-{group_name} has a sampling problem. {len(group_min_qual)} active "
                             f"users min 4 quality edits and target sample size of {target_user_count}")
+            target_user_count = len(group_min_qual)
         group_min_qual_incl = group_min_qual.sample(n=target_user_count)
 
-        logging.info(f"Group {lang}-{group_name} Saving {len(group_min_qual_incl)} as included.")
         return group_min_qual_incl
 
 
