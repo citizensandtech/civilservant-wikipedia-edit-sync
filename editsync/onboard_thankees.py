@@ -162,7 +162,6 @@ class thankeeOnboarder():
         if self.max_onboarders_to_check:
             group_df = group_df[:self.max_onboarders_to_check]
 
-        logging.info(f"Group {lang}-{group_name} has {len(known_users)} active users min 4 edits.")
         needing_saving = group_df[
             group_df['user_id'].apply(lambda uid: uid not in [u.user_id for u in known_users])]
         self.df_to_db(needing_saving)
@@ -172,6 +171,9 @@ class thankeeOnboarder():
         # group_df.to_csv(f'add_num_quality.{lang}.{group_name}.csv')
         # sample down to target size and set the inclusion flag
         logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
+        logging.info(f"Group df head: {group_df.head(5)}")
+        logging.info(f"Reminder min edit quality count is: {self.min_edit_count}")
+        logging.info(f"Type of  group_df['user_editcount_quality']: {group_df['user_editcount_quality'].dtypes}")
         group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
         logging.info(f"Group {lang}-{group_name} has {len(group_min_qual)} active users min 4 quality edits.")
         if len(group_min_qual) < target_user_count:
@@ -336,6 +338,7 @@ class thankeeOnboarder():
         # now doing it the sqlalchemy way
         all_included_users = self.db_session.query(candidates).filter(candidates.user_included==True)
         out_df = pd.read_sql(all_included_users.statement, all_included_users.session.bind)
+        # now
         logging.info(f"outputted data to: {out_f}")
         out_df.to_csv(out_f, index=False)
 
