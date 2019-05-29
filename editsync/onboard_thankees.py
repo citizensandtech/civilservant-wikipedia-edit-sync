@@ -173,7 +173,8 @@ class thankeeOnboarder():
         # group_df.to_csv(f'add_num_quality.{lang}.{group_name}.csv')
         # sample down to target size and set the inclusion flag
         logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
-        logging.info(f"Group df head: {group_df.head(5)}")
+        logging.info(f"Group df user_editcount_quality head: {group_df['user_editcount_quality'].head(5)}")
+        logging.info(f"Group df user_editcount_quality 1st item: {group_df['user_editcount_quality'].head(5)}")
         logging.info(f"Reminder min edit quality count is: {self.min_edit_count}")
         logging.info(f"Type of  group_df['user_editcount_quality']: {group_df['user_editcount_quality'].dtypes}")
         group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
@@ -234,7 +235,7 @@ class thankeeOnboarder():
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).one().user_editcount_quality
             # logging.info(f'num quality is {num_quality}')
-
+            num_quality = float('nan') if num_quality is None else num_quality
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
                                                           'lang': [lang]}, orient='columns')
