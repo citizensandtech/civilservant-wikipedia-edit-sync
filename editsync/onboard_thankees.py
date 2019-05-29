@@ -168,6 +168,8 @@ class thankeeOnboarder():
 
         # enqueue jobs
         group_df = self.add_num_quality_df(group_df, lang)
+        # small cleaning step
+        group_df = group_df.fillna(value={'user_editcount_quality': 0}, downcast='infer')
         # group_df.to_csv(f'add_num_quality.{lang}.{group_name}.csv')
         # sample down to target size and set the inclusion flag
         logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
@@ -337,8 +339,11 @@ class thankeeOnboarder():
 
         # now doing it the sqlalchemy way
         all_included_users = self.db_session.query(candidates).filter(candidates.user_included==True)
+
         out_df = pd.read_sql(all_included_users.statement, all_included_users.session.bind)
         # now
+        out_df = out_df.rename(columns={'user_experience_level': 'prev_experience'})
+
         logging.info(f"outputted data to: {out_f}")
         out_df.to_csv(out_f, index=False)
 
