@@ -1,6 +1,6 @@
 project_dir: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thankee
 randomizations_dir: randomization_output
-randomizations_file: all-thankee-randomization-datadrill-20190507.csv
+randomizations_file: thanks-recipient-randomizations-20190531.csv
 
 
 csv_db_map:
@@ -12,6 +12,6 @@ cols_to_save:
     - anonymized_id
     - user_id
     - user_editcount
-    - user_editcount_qualityxham
+    - user_editcount_quality
     - randomization_block_id
     - randomization_block_size

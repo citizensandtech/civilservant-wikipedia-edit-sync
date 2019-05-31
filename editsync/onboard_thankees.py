@@ -1,5 +1,6 @@
 import inspect
 import os
+import sqlalchemy
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -8,6 +9,7 @@ import click
 import pandas as pd
 import yaml
 import civilservant.logs
+from civilservant.util import PlatformType, ThingType
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
 from civilservant.wikipedia.queries.users import get_active_users
 # from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
@@ -20,6 +22,7 @@ import civilservant.models.core
 
 from civilservant.wikipedia.connections.database import make_wmf_con
 from civilservant.models.wikipedia.thankees import candidates, edits
+from civilservant.models.core import ExperimentThing
 from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, \
     WIKIPEDIA_START_DATE, get_namespace_fn
 
@@ -295,17 +298,35 @@ class thankeeOnboarder():
         revs_to_get = set(new_user_revs['rev_id'].values)
 
         # get and store.
-        logging.info(f"getting display data for {len(revs_to_get)} for user {refresh_user.candidate_id}")
+        logging.info(f"getting display data for {len(revs_to_get)} revs for user {refresh_user.candidate_id}")
         display_data = get_display_data(list(revs_to_get), lang)
 
         edits_to_add = []
+        ets_to_add = []
         for rev_id, display_datum in display_data.items():
             edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.candidate_id}
             edit = {**edit_meta, **display_datum}
+            # from IPython import embed; embed()
             edit_to_add = edits(**edit)
             edits_to_add.append(edit_to_add)
 
-        return edits_to_add
+            et_to_add = ExperimentThing(
+                            id=f'edit:{lang}:{rev_id}',
+                            thing_id=None,
+                            experiment_id=-10,
+                            randomization_condition=None,
+                            randomization_arm=None,
+                            object_platform=PlatformType.WIKIPEDIA,
+                            object_type=ThingType.WIKIPEDIA_EDIT,
+                            object_created_dt=datetime.utcnow(),
+                            query_index=f'user:{refresh_user.lang}:{refresh_user.user_id}', #make it easy to lookup the edits of a user later
+                            syncable=True,
+                            synced_dt=None,
+                            metadata_json=edit)
+
+            ets_to_add.append(et_to_add)
+
+        return edits_to_add, ets_to_add
 
     def refresh_edits(self, lang):
         """
@@ -324,11 +345,16 @@ class thankeeOnboarder():
 
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
         for refresh_user in refresh_users:
-            refresh_data = []
-            user_refresh_data = self.refresh_user_edits_comparative(refresh_user, lang)
-            refresh_data.extend(user_refresh_data)
-            self.db_session.add_all(refresh_data)
+            user_refresh_data, user_refresh_ets = self.refresh_user_edits_comparative(refresh_user, lang)
+
+            # add our local rows that are *wide*
+            self.db_session.add_all(user_refresh_data)
             self.db_session.commit()
+
+            # add in the experiment thing way
+            self.db_session.add_all(user_refresh_ets)
+            self.db_session.commit()
+
 
     def output_population(self):
         # if we've processed every lang
@@ -348,13 +374,6 @@ class thankeeOnboarder():
         logging.info(f"outputted data to: {out_f}")
         out_df.to_csv(out_f, index=False)
 
-    def send_included_users_edits_to_cs_hq(self, lang):
-        """
-        - send newly included users to cs hq
-        - send new editdisplay data back to cs hq
-        - over api
-        :return:
-        """
 
     def receive_active_uncompleted_users(self, lang):
         """
@@ -367,7 +386,6 @@ class thankeeOnboarder():
         - may only be once , but need to know who is in the thanker expirement.
         :return:
         """
-        # TODO stopgap measure
         thankers_d = os.path.join(self.config['dirs']['project'], self.config['dirs']['thankers'])
         thankers_ls = os.listdir(thankers_d)
         thankers_ls_lang = [f for f in thankers_ls if f.startswith(lang)]

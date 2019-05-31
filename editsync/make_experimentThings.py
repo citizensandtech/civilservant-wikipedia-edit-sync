@@ -14,6 +14,7 @@ from civilservant.util import PlatformType, ThingType
 civilservant.logs.initialize()
 import logging
 
+
 class randomizationUploader():
     def __init__(self, config_file, fn):
         """groups needing edits and size N edits to be included which k edits to be displayed
@@ -28,35 +29,36 @@ class randomizationUploader():
     def num_experiment_things(self):
         return self.db_session.query(ExperimentThing).count()
 
-
-    def read_input(self, user):
-        self.randomizations_f = os.path.join(self.config['project_dir'], self.config['randomizations_dir'], self.config['randomizations_file'])
+    def read_input(self):
+        self.randomizations_f = os.path.join(self.config['project_dir'], self.config['randomizations_dir'],
+                                             self.config['randomizations_file'])
         self.df = pd.read_csv(self.randomizations_f)
 
-    def upload(self, cols_to_save):
+    def upload(self, cols_to_save, thanker_thankee):
         self.ets_to_add = []
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
-            id = f'{row["lang"]}:{row["user_id"]}'
-            logging.info(f'attempting id {id}')
-            existing_id_record = self.db_session.query(ExperimentThing).filter(ExperimentThing.id==id).one_or_none()
+            et_id = f'user:{row["lang"]}:{row["user_id"]}'
+            logging.info(f'attempting id {et_id}')
+            existing_id_record = self.db_session.query(ExperimentThing).filter(
+                ExperimentThing.id == et_id).one_or_none()
             if existing_id_record:
                 continue
             else:
                 et = ExperimentThing(
-                                id=id,
-                                thing_id=row['anonymized_id'],
-                                experiment_id = -1,
-                                randomization_condition = 'main',
-                                randomization_arm = row['randomization_arm'],
-                                object_platform = PlatformType.WIKIPEDIA,
-                                object_type = ThingType.WIKIPEDIA_USER,
-                                object_created_dt = None,
-                                query_index = None,
-                                syncable = True,
-                                synced_dt = None,
-                                metadata_json = row_map)
+                    id=et_id,
+                    thing_id=row["anonymized_id"],
+                    experiment_id=-1 if thanker_thankee == 'thanker' else -2,
+                    randomization_condition='main',
+                    randomization_arm=row["randomization_arm"],
+                    object_platform=PlatformType.WIKIPEDIA,
+                    object_type=ThingType.WIKIPEDIA_USER,
+                    object_created_dt=None,
+                    query_index=None,
+                    syncable=True,
+                    synced_dt=None,
+                    metadata_json=row_map)
                 self.ets_to_add.append(et)
             self.db_session.add_all(self.ets_to_add)
             self.db_session.commit()
@@ -68,19 +70,19 @@ class randomizationUploader():
 
     def confirm_upload(self):
         curr_num_experiment_things = self.num_experiment_things()
+        logging.info(f'experiment things. initially {self.inital_num_experiment_things}, added {self.ets_to_add}, ended {curr_num_experiment_things}')
         assert self.inital_num_experiment_things + len(self.ets_to_add) == curr_num_experiment_things
-
 
     def run(self, fn):
         if fn == 'thankers':
-            cols_to_save = self.config['cols_to_save']['thankers']
+            cols_to_save = self.config['cols_to_save']
             self.read_input()
-            self.upload(cols_to_save)
+            self.upload(cols_to_save, thanker_thankee=fn)
             self.confirm_upload()
         if fn == 'thankees':
-            cols_to_save = self.config['cols_to_save']['thankees']
+            cols_to_save = self.config['cols_to_save']
             self.read_input()
-            self.upload(cols_to_save)
+            self.upload(cols_to_save, thanker_thankee=fn)
             self.confirm_upload()
 
 
@@ -96,8 +98,3 @@ def run_onboard(fn, config):
 if __name__ == "__main__":
     logging.info("Starting randomization uploader")
     run_onboard()
-
-
-
-
-
