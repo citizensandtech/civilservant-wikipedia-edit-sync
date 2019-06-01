@@ -4,7 +4,6 @@
 https://wikitech.wikimedia.org/w/index.php?title=Special:CreateAccount
 - upload ssh key through Prefecences--openstack
 - make user a member of a VPS project (this should give them bastion)
--
 
 ## setting up the os environ
 - install python 3 from source https://realpython.com/installing-python/
@@ -39,7 +38,7 @@ can `git clone https://github.com/mitmedialab/civilservantlib-wikipedia` without
 
 ## since last sync
 - things that weren't in pipfile: pandas mwdb
------ after pipenv installing them, branch changes overwritten on civilservant-wikipedia
+- after pipenv installing them, branch changes overwritten on civilservant-wikipedia
 - how to properly import from data_gathering_jobs
 - db.py ?charset=utf8, encoding="utf-8"
 
