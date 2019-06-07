@@ -70,7 +70,7 @@ class randomizationUploader():
 
     def confirm_upload(self):
         curr_num_experiment_things = self.num_experiment_things()
-        logging.info(f'experiment things. initially {self.inital_num_experiment_things}, added {self.ets_to_add}, ended {curr_num_experiment_things}')
+        logging.info(f'experiment things. initially {self.inital_num_experiment_things}, added {len(self.ets_to_add)}, ended {curr_num_experiment_things}')
         assert self.inital_num_experiment_things + len(self.ets_to_add) == curr_num_experiment_things
 
     def run(self, fn):
