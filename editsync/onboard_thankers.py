@@ -61,9 +61,8 @@ class thankerOnboarder():
                 self.write_output(output_dir=f'{input_type}_unresolvable', output_df_dict=None, lang=lang, fname_extra='unresolvable_ids', df_to_write=unresolvable)
 
             df = df[pd.notnull(df['user_id'])]
-
-
             del df['user_name_resp']
+
         elif input_type == 'survey_file':
             pass
         return df

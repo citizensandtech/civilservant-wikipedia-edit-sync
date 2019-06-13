@@ -1,0 +1,26 @@
+langs:
+  ar:
+    consented_file: ar_consent_6_13.csv
+    survey_file: ar_pre_surveys.csv
+    superthanker_file: ar_superthankers.csv
+  de:
+    consented_file: de_consent_6_13.csv
+    survey_file: de_pre_surveys.csv
+    superthanker_file: de_superthankers.csv
+  fa:
+    consented_file: fa_consent_6_13.csv
+    survey_file: fa_pre_surveys.csv
+    superthanker_file: fa_superthankers.csv
+  pl:
+    consented_file: pl_consent_6_13.csv
+    survey_file: pl_pre_surveys.csv
+    superthanker_file: pl_superthankers.csv
+
+dirs:
+  project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_softlaunch
+  input: julia_input
+  historical_output: historical
+  merged_output: historical_survey_merged
+  superthanker_merged_output: historical_survey_superthanker_merged
+experiment_start_date: 2019-06-13
+observation_back_days: 84
