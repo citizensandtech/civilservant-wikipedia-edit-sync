@@ -1,4 +1,3 @@
-# these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
 langs:
   de:
     consented_file: de_consented_thankers.csv
