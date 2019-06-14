@@ -138,7 +138,7 @@ class thankerOnboarder():
             user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
             rev_ids = user_df['rev_id'].values
             #TODO  undo this limitation when we're really in production
-            rev_ids = rev_ids[:10]
+            # rev_ids = rev_ids[:10]
             logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
             user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
             user_revert_dfs.append(user_revert_df)
