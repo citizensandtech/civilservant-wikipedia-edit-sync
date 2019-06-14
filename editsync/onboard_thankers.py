@@ -212,6 +212,7 @@ class thankerOnboarder():
     def add_has_email(self, df, lang):
         user_prop_dfs = []
         user_ids = df['user_id'].values
+        logging.info(f'add has email looking at {len(user_ids)} users')
         for user_id in user_ids:
             user_prop_df = get_user_disablemail_properties(lang, user_id, self.wmf_con)
             has_email = False if len(
@@ -219,9 +220,10 @@ class thankerOnboarder():
             user_prop_dfs.append(pd.DataFrame.from_dict({'has_email': [has_email],
                                                          'user_id': [user_id],
                                                          'lang': [lang]}, orient='columns'))
+        logging.info(f'there are {len(user_prop_dfs)} user prop dfs')
 
         users_prop_df = pd.concat(user_prop_dfs)
-        logging.info(f'users_prop_df has memory usage {users_prop_df.memory_usage()}. size {users_prop_df.memory_usage()} ')
+        logging.info(f'users_prop_df has memory usage {users_prop_df.memory_usage()}. size {users_prop_df.size()} ')
         logging.info(f'users_prop_df head {users_prop_df.head()}')
         logging.info(f'df has memory usage {df.memory_usage()}. size {df.memory_usage()} ')
         logging.info(f'df head {df.head()}')
