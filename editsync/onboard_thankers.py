@@ -51,16 +51,18 @@ class thankerOnboarder():
         if input_type == 'consented_file':
             df['user_name_resp'] = df['user_name'].apply(lambda u: normalize_user_name_get_user_id_api(user_name=u, mwapi_session=self.mwapi_sessions[lang]))
             df['user_name'] = df['user_name_resp'].apply(lambda d: d['name'])
-            df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'] if 'userid' in d.keys() else float('nan'))
+            df['user_id'] = df['user_name_resp'].apply(lambda d: d['userid'] if 'userid' in d.keys() else -1)
+            assert df['user_id'].dtype == pd.np.int64
+            df['lang'] = df['lang'].apply(lambda s: s.lower())
 
             if 'lang' not in df.columns:
                 df['lang'] = lang
 
-            unresolvable = df[pd.isnull(df['user_id'])]
+            unresolvable = df[df['user_id']<0]
             if len(unresolvable) > 0:
                 self.write_output(output_dir=f'{input_type}_unresolvable', output_df_dict=None, lang=lang, fname_extra='unresolvable_ids', df_to_write=unresolvable)
 
-            df = df[pd.notnull(df['user_id'])]
+            df = df[df['user_id']>0]
             del df['user_name_resp']
 
         elif input_type == 'survey_file':
@@ -136,7 +138,7 @@ class thankerOnboarder():
             user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
             rev_ids = user_df['rev_id'].values
             #TODO  undo this limitation when we're really in production
-            # rev_ids = rev_ids[:100]
+            rev_ids = rev_ids[:10]
             logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
             user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
             user_revert_dfs.append(user_revert_df)
@@ -160,6 +162,7 @@ class thankerOnboarder():
             user_df = get_user_edits(lang, user_id, start_date, end_date, wmf_con=self.wmf_con)
             user_talk_df = self.get_talk_counts(user_id, user_df, namespace_fn, col_label)
             talk_dfs.append(user_talk_df)
+
         talk_df = pd.concat(talk_dfs)
         df = pd.merge(df, talk_df, how='left', on=['user_id'])
         return df
@@ -220,13 +223,9 @@ class thankerOnboarder():
             user_prop_dfs.append(pd.DataFrame.from_dict({'has_email': [has_email],
                                                          'user_id': [user_id],
                                                          'lang': [lang]}, orient='columns'))
-        logging.info(f'there are {len(user_prop_dfs)} user prop dfs')
 
         users_prop_df = pd.concat(user_prop_dfs)
-        logging.info(f'users_prop_df has memory usage {users_prop_df.memory_usage()}. size {users_prop_df.size()} ')
-        logging.info(f'users_prop_df head {users_prop_df.head()}')
-        logging.info(f'df has memory usage {df.memory_usage()}. size {df.memory_usage()} ')
-        logging.info(f'df head {df.head()}')
+
         df = pd.merge(df, users_prop_df, how='left', on=['user_id', 'lang'])
         return df
 
@@ -234,28 +233,30 @@ class thankerOnboarder():
         df = self.thankers[lang]
         logging.info("starting to get database information")
 
-        logging.info('adding bots')
-        df = self.add_bots(df, lang)
-
-        logging.info('adding reverts')
+        logging.info(f'adding reverts, shape of df is {df.shape}')
         df = self.add_reverting_actions(df, lang)
 
-        logging.info('adding wikithanks')
-        df = self.add_thanks(df, lang)
-
-        logging.info('adding wikiloves')
-        df = self.add_wikiloves(df, lang)
-
-        logging.info('adding blocks')
-        df = self.add_blocks(df, lang)
-
-        logging.info('adding project talk')
+        logging.info(f'adding project talk, shape of df is {df.shape}')
         df = self.add_project_talk(df, lang)
 
-        logging.info('adding support talk')
+        logging.info(f'adding support talk, shape of df is {df.shape}')
         df = self.add_support_talk(df, lang)
 
-        logging.info('adding email')
+        logging.info(f'adding bots, shape of df is {df.shape}')
+        df = self.add_bots(df, lang)
+
+
+        logging.info(f'adding wikithanks, shape of df is {df.shape}')
+        df = self.add_thanks(df, lang)
+
+        logging.info(f'adding wikiloves, shape of df is {df.shape}')
+        df = self.add_wikiloves(df, lang)
+
+        logging.info(f'adding blocks, shape of df is {df.shape}')
+        df = self.add_blocks(df, lang)
+
+
+        logging.info(f'adding email, shape of df is {df.shape}')
         df = self.add_has_email(df, lang)
 
         logging.debug(df)
