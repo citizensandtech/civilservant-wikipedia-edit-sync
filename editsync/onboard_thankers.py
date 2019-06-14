@@ -221,6 +221,10 @@ class thankerOnboarder():
                                                          'lang': [lang]}, orient='columns'))
 
         users_prop_df = pd.concat(user_prop_dfs)
+        logging.info(f'users_prop_df has memory usage {users_prop_df.memory_usage()}. size {users_prop_df.memory_usage()} ')
+        logging.info(f'users_prop_df head {users_prop_df.head()}')
+        logging.info(f'df has memory usage {df.memory_usage()}. size {df.memory_usage()} ')
+        logging.info(f'df head {df.head()}')
         df = pd.merge(df, users_prop_df, how='left', on=['user_id', 'lang'])
         return df
 
