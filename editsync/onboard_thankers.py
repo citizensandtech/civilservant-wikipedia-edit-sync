@@ -135,10 +135,11 @@ class thankerOnboarder():
         schema = mwdb.Schema(f"mysql+pymysql://{os.getenv('WMF_MYSQL_HOST')}:{os.getenv('WMF_MYSQL_PORT')}/{lang}wiki_p?read_default_file=~/replica.my.cnf",
                              only_tables=['revision'], pool_size=9, max_overflow=0)
         for user_id in df['user_id'].values:
+            self.wmf_con = make_wmf_con()
             user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
             rev_ids = user_df['rev_id'].values
             #TODO  undo this limitation when we're really in production
-            rev_ids = rev_ids[:10]
+            # rev_ids = rev_ids[:10]
             logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
             user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
             user_revert_dfs.append(user_revert_df)
