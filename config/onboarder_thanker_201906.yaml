@@ -2,22 +2,26 @@ langs:
   ar:
     consented_file_raw: ar_consent_6_13.csv
     consented_file: ar_consent_6_13_clean.csv
-    survey_file: ar_pre_surveys.csv
+    survey_file_raw: ar_survey_6_13.csv
+    survey_file: ar_survey_6_13_clean.csv
     superthanker_file: ar_superthankers.csv
   de:
     consented_file_raw: de_consent_6_13.csv
     consented_file: de_consent_6_13_clean.csv
-    survey_file: de_pre_surveys.csv
+    survey_file_raw: de_survey_6_13.csv
+    survey_file: de_survey_6_13_clean.csv
     superthanker_file: de_superthankers.csv
   fa:
     consented_file_raw: fa_consent_6_13.csv
     consented_file: fa_consent_6_13_clean.csv
-    survey_file: fa_pre_surveys.csv
+    survey_file_raw: fa_survey_6_13.csv
+    survey_file: fa_survey_6_13_clean.csv
     superthanker_file: fa_superthankers.csv
   pl:
     consented_file_raw: pl_consent_6_13.csv
     consented_file: pl_consent_6_13_clean.csv
-    survey_file: pl_pre_surveys.csv
+    survey_file_raw: pl_survey_6_13.csv
+    survey_file: pl_survey_6_13_clean.csv
     superthanker_file: pl_superthankers.csv
 
 dirs:
@@ -25,6 +29,7 @@ dirs:
   input: julia_input
   historical_output: historical
   merged_output: historical_survey_merged
+  merged_no_survey_output: historical_survey_merged_consented_no_survey
   superthanker_merged_output: historical_survey_superthanker_merged
 experiment_start_date: 2019-06-13
 observation_back_days: 84

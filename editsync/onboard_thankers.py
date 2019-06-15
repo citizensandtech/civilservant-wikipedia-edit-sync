@@ -36,6 +36,7 @@ class thankerOnboarder():
         self.thankers = {}
         self.surveys = {}
         self.merged = {}
+        self.merged_no_survey = {}
         self.superthankers = {}
 
         self.qualtrics_map = yaml.safe_load(open(os.path.join(Path(__file__).parent.parent, 'config', "qualtrics_to_interal_field_map.yaml"), 'r'))
@@ -275,6 +276,7 @@ class thankerOnboarder():
 
     def write_merged_survey_output(self, lang):
         self.write_output(self.config['dirs']['merged_output'], self.merged, lang, "merged")
+        self.write_output(self.config['dirs']['merged_no_survey_output'], self.merged_no_survey, lang, "consented_no_survey")
 
     def write_excluded_superthankers_output(self, lang):
         self.write_output(self.config['dirs']['superthanker_merged_output'], self.merged, lang, "merged_no_superthankers")
@@ -317,7 +319,10 @@ class thankerOnboarder():
         s['lang'] = lang
         merged_df = pd.merge(t, s, how="left", on=['ID'], suffixes=("", "__survey"))
         merged_df = merged_df.rename(columns=self.qualtrics_map)
-        self.merged[lang] = merged_df
+        consented_no_survey = merged_df[pd.isnull(merged_df['StartDate__survey'])]  # why startdate__survey, just the first column i expect wuold have a value if merged correctly
+        consented_and_survey = merged_df[pd.notnull(merged_df['StartDate__survey'])]
+        self.merged[lang] = consented_and_survey
+        self.merged_no_survey[lang] = consented_no_survey
 
     def exclude_superthankers(self, lang):
         merged = self.merged[lang]
