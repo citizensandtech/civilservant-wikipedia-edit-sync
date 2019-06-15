@@ -17,6 +17,7 @@ from civilservant.wikipedia.queries.users import normalize_user_name_get_user_id
 
 import civilservant.logs
 from civilservant.wikipedia.utils import get_namespace_fn
+from sqlalchemy import exc
 
 civilservant.logs.initialize()
 import logging
@@ -133,16 +134,23 @@ class thankerOnboarder():
     def add_reverting_actions(self, df, lang):
         user_revert_dfs = []
         schema = mwdb.Schema(f"mysql+pymysql://{os.getenv('WMF_MYSQL_HOST')}:{os.getenv('WMF_MYSQL_PORT')}/{lang}wiki_p?read_default_file=~/replica.my.cnf",
-                             only_tables=['revision'], pool_size=9, max_overflow=0)
+                             only_tables=['revision'], pool_size=5, max_overflow=0)
         for user_id in df['user_id'].values:
-            self.wmf_con = make_wmf_con()
-            user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
-            rev_ids = user_df['rev_id'].values
-            #TODO  undo this limitation when we're really in production
-            # rev_ids = rev_ids[:10]
-            logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
-            user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
-            user_revert_dfs.append(user_revert_df)
+            revert_q_attempt = 0
+            revert_q_complete = False
+            while revert_q_attempt < 5 and not revert_q_complete:
+                try:
+                    user_df = get_user_edits(lang, user_id, self.observation_start_date, self.experiment_start_date, wmf_con=self.wmf_con)
+                    rev_ids = user_df['rev_id'].values
+                    #TODO  undo this limitation when we're really in production
+                    # rev_ids = rev_ids[:10]
+                    logging.info(f"User {lang}:{user_id}, has {len(rev_ids)} revs between {self.observation_start_date} and {self.experiment_start_date}")
+                    user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
+                    user_revert_dfs.append(user_revert_df)
+                    revert_q_complete = True
+                except exc.OperationalError:
+                    revert_q_attempt += 1
+                    self.wmf_con = make_wmf_con()
 
         user_reverts = pd.concat(user_revert_dfs)
         return pd.merge(df, user_reverts, on=['user_id', 'lang'])
