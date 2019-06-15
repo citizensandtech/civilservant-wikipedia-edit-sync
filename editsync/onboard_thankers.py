@@ -150,7 +150,6 @@ class thankerOnboarder():
                     revert_q_complete = True
                 except exc.OperationalError:
                     revert_q_attempt += 1
-                    self.wmf_con = make_wmf_con()
 
         user_reverts = pd.concat(user_revert_dfs)
         return pd.merge(df, user_reverts, on=['user_id', 'lang'])
