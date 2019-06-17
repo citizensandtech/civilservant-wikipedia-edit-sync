@@ -248,7 +248,7 @@ class thankerOnboarder():
         df = self.add_user_basic_data(df, lang)
 
         logging.info(f'adding experience bin. shape of df is {df.shape}')
-        df = add_experience_bin(df, self.experiment_start_date)
+        df = add_experience_bin(df, datetime.datetime.combine(self.experiment_start_date, datetime.time()))
 
         logging.info(f'adding labor hours. shape of df is {df.shape}')
         df = add_labour_hours(df, lang,
