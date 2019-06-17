@@ -19,7 +19,7 @@ import civilservant.logs
 from civilservant.wikipedia.utils import get_namespace_fn, add_experience_bin
 from sqlalchemy import exc
 
-from editsync.data_gathering_jobs import add_labour_hours
+from data_gathering_jobs import add_labour_hours
 
 civilservant.logs.initialize()
 import logging
