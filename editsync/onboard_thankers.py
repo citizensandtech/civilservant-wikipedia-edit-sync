@@ -16,8 +16,10 @@ from civilservant.wikipedia.queries.users import normalize_user_name_get_user_id
     get_user_edits, get_official_bots
 
 import civilservant.logs
-from civilservant.wikipedia.utils import get_namespace_fn
+from civilservant.wikipedia.utils import get_namespace_fn, add_experience_bin
 from sqlalchemy import exc
+
+from editsync.data_gathering_jobs import add_labour_hours
 
 civilservant.logs.initialize()
 import logging
@@ -241,6 +243,18 @@ class thankerOnboarder():
     def make_thanker_historical_data(self, lang):
         df = self.thankers[lang]
         logging.info("starting to get database information")
+
+        logging.info(f'adding user basic data. shape of df is {df.shape}')
+        df = self.add_user_basic_data(df, lang)
+
+        logging.info(f'adding experience bin. shape of df is {df.shape}')
+        df = add_experience_bin(df, self.experiment_start_date)
+
+        logging.info(f'adding labor hours. shape of df is {df.shape}')
+        df = add_labour_hours(df, lang,
+                              start_date=self.observation_start_date,
+                              end_date=self.experiment_start_date,
+                              wmf_con=self.wmf_con, col_label="labor_hours_84_pre_treatment")
 
         logging.info(f'adding reverts, shape of df is {df.shape}')
         df = self.add_reverting_actions(df, lang)
