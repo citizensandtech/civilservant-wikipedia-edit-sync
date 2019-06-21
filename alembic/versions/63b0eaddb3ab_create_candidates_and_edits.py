@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade():
     op.create_table('candidates',
-    sa.Column('candidate_id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('lang', mysql.TINYTEXT(), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=True),
@@ -35,7 +35,7 @@ def upgrade():
     sa.Column('has_email', sa.Boolean(), nullable=True),
     sa.Column('user_completed', sa.Boolean(), nullable=True),
     sa.Column('user_included', sa.Boolean(), nullable=True),
-    sa.PrimaryKeyConstraint('candidate_id'),
+    sa.PrimaryKeyConstraint('id'),
     mysql_charset='utf8',
     mysql_collate='utf8_general_ci',
     mysql_engine='InnoDB'
@@ -44,7 +44,7 @@ def upgrade():
     op.create_index(op.f('ix_candidates_created_at'), 'candidates', ['created_at'], unique=False)
     op.create_index(op.f('ix_candidates_user_id'), 'candidates', ['user_id'], unique=False)
     op.create_table('edits',
-    sa.Column('edit_id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('candidate_id', sa.Integer(), nullable=True),
     sa.Column('lang', mysql.TINYTEXT(), nullable=True),
     sa.Column('rev_id', sa.Integer(), nullable=True),
@@ -65,7 +65,7 @@ def upgrade():
     sa.Column('oldRevUser', mysql.TINYTEXT(), nullable=True),
     sa.Column('oldRevComment', sa.TEXT(), nullable=True),
     sa.Column('pageTitle', mysql.TINYTEXT(), nullable=True),
-    sa.PrimaryKeyConstraint('edit_id'),
+    sa.PrimaryKeyConstraint('id'),
     mysql_charset='utf8',
     mysql_collate='utf8_general_ci',
     mysql_engine='InnoDB'
