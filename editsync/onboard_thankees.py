@@ -286,25 +286,25 @@ class thankeeOnboarder():
         # do this in a user-oriented way, or a process-oriented way?
         # revisions of users
         small_user_df = pd.DataFrame({"user_id": [refresh_user.user_id]})
-        logging.info(f"starting to get quality edits for user {refresh_user.candidate_id}")
+        logging.info(f"starting to get quality edits for user {refresh_user.id}")
         # already received revisions
         already_revs_res = self.db_session.query(edits).filter(edits.lang == lang).filter(
-            edits.candidate_id == refresh_user.candidate_id).all()
+            edits.candidate_id == refresh_user.id).all()
         already_revs = set([r.rev_id for r in already_revs_res])
-        logging.info(f"already have {len(already_revs)} revs for user {refresh_user.candidate_id}")
+        logging.info(f"already have {len(already_revs)} revs for user {refresh_user.id}")
 
         new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con, exclusion_rev_ids=already_revs)
         # revisions needing getting = revs - already
         revs_to_get = set(new_user_revs['rev_id'].values)
 
         # get and store.
-        logging.info(f"getting display data for {len(revs_to_get)} revs for user {refresh_user.candidate_id}")
+        logging.info(f"getting display data for {len(revs_to_get)} revs for user {refresh_user.id}")
         display_data = get_display_data(list(revs_to_get), lang)
 
         edits_to_add = []
         ets_to_add = []
         for rev_id, display_datum in display_data.items():
-            edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.candidate_id}
+            edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.id}
             edit = {**edit_meta, **display_datum}
             # from IPython import embed; embed()
             edit_to_add = edits(**edit)
