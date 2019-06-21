@@ -9,8 +9,6 @@ Pipfile.lock
 *.env
 /lib
 
-alembic.ini
-
 \.idea/
 
 editsync/cache/ores_ndgf/
