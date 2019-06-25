@@ -36,6 +36,8 @@ langs:
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thankee
   output: historical_output
+  thankers: thankers_to_exclude
+
 
 experiment_start_date: 2019-04-01
 max_onboarders_to_check: 100

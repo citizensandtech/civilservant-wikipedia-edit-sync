@@ -177,7 +177,7 @@ class thankeeOnboarder():
         # sample down to target size and set the inclusion flag
         logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
         logging.info(f"Group df user_editcount_quality head: {group_df['user_editcount_quality'].head(5)}")
-        logging.info(f"Group df user_editcount_quality 1st item: {group_df['user_editcount_quality'].head(5)}")
+        logging.info(f"Group df user_editcount_quality 1st item: {group_df.loc[1]}")
         logging.info(f"Reminder min edit quality count is: {self.min_edit_count}")
         logging.info(f"Type of  group_df['user_editcount_quality']: {group_df['user_editcount_quality'].dtypes}")
         group_min_qual = group_df[group_df['user_editcount_quality'] >= self.min_edit_count]
@@ -401,8 +401,11 @@ class thankeeOnboarder():
     def run(self, fn):
         # lang loop stage
         for lang in self.langs.keys():
+            logging.info(f"working on {lang}")
             if fn == "onboard":
+                logging.info(f"receiving thankers")
                 self.receive_users_in_thanker_experiment(lang)
+                logging.info(f"sampling populations")
                 self.sample_population(lang)
             elif fn == "refresh":
                 self.refresh_edits(lang)
