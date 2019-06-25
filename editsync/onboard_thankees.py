@@ -171,10 +171,18 @@ class thankeeOnboarder():
 
         # enqueue jobs
         group_df = self.add_num_quality_df(group_df, lang)
+        self.db_session.commit()
+        logging.info("raw return from add_num_quality")
+        logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
+        logging.info(f"Group df user_editcount_quality head: {group_df['user_editcount_quality'].head(5)}")
+        logging.info(f"Group df user_editcount_quality maxitem: {group_df['user_editcount_quality'].max()}")
+        logging.info(f"Reminder min edit quality count is: {self.min_edit_count}")
+        logging.info(f"Type of  group_df['user_editcount_quality']: {group_df['user_editcount_quality'].dtypes}")
         # small cleaning step
         group_df = group_df.fillna(value={'user_editcount_quality': 0}, downcast='infer')
         # group_df.to_csv(f'add_num_quality.{lang}.{group_name}.csv')
         # sample down to target size and set the inclusion flag
+        logging.info("after supposedly filling nan's with 0 for edit count quality")
         logging.info(f"Group {lang}-{group_name} has {len(group_df)} users with editcount_quality data.")
         logging.info(f"Group df user_editcount_quality head: {group_df['user_editcount_quality'].head(5)}")
         logging.info(f"Group df user_editcount_quality maxitem: {group_df['user_editcount_quality'].max()}")
@@ -230,14 +238,15 @@ class thankeeOnboarder():
             if not failed_user_ids:
                 queue_successufully_ran = True
             else:
-                users_to_job = failed_user_ids
+                user_to_job = failed_user_ids
 
         # add num_quality back into the dataframe
+        self.db_session.commit()
         num_quality_dfs = []
         for user_id in user_ids:
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).one().user_editcount_quality
-            # logging.info(f'num quality is {num_quality}')
+            logging.info(f'putting data back into num quality is {num_quality} for user {user_id}')
             num_quality = float('nan') if num_quality is None else num_quality
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
