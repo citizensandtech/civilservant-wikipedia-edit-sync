@@ -1,5 +1,22 @@
 # these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
 langs:
+  fa:
+#    min_rev_id: 25156442
+    min_rev_id: 25800000
+    groups:
+      newcomer:
+        experience_levels:
+          - bin_0
+        user_count: 200
+      experienced:
+        experience_levels:
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 200
   ar:
 #    min_rev_id: 32457280
     min_rev_id: 33850000
@@ -20,23 +37,6 @@ langs:
   de:
 #    min_rev_id: 184258647
     min_rev_id: 187110000
-    groups:
-      newcomer:
-        experience_levels:
-          - bin_0
-        user_count: 200
-      experienced:
-        experience_levels:
-          - bin_90
-          - bin_180
-          - bin_365
-          - bin_730
-          - bin_1460
-          - bin_2920
-        user_count: 200
-  fa:
-#    min_rev_id: 25156442
-    min_rev_id: 25800000
     groups:
       newcomer:
         experience_levels:
