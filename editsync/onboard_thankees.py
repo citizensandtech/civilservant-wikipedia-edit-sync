@@ -24,7 +24,7 @@ from civilservant.wikipedia.connections.database import make_wmf_con
 from civilservant.models.wikipedia.thankees import candidates, edits
 from civilservant.models.core import ExperimentThing
 from civilservant.wikipedia.utils import to_wmftimestamp, from_wmftimestamp, decode_or_nan, add_experience_bin, \
-    WIKIPEDIA_START_DATE, get_namespace_fn
+    WIKIPEDIA_START_DATE, get_namespace_fn, THANK_FEATURE_INTRODUCITON
 
 from datetime import timedelta, datetime, date
 
@@ -122,10 +122,10 @@ class thankeeOnboarder():
                 df = add_has_email(df, lang, self.wmf_con)
                 self.df_to_db_col(lang, df, 'has_email')
 
-            logging.info(f'adding nump prev_thanks_pre_sample')
+            logging.info(f'adding num prev_thanks_pre_sample')
             if "num_prev_thanks_pre_sample" not in df.columns:
                 df = add_thanks_receiving(df, lang,
-                                          start_date=WIKIPEDIA_START_DATE, end_date=self.onboarding_latest_active_date,
+                                          start_date=THANK_FEATURE_INTRODUCITON, end_date=self.onboarding_latest_active_date,
                                           wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
                 self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
 
@@ -246,7 +246,7 @@ class thankeeOnboarder():
         for user_id in user_ids:
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).one().user_editcount_quality
-            logging.info(f'putting data back into num quality is {num_quality} for user {user_id}')
+            logging.debug(f'putting data back into num quality is {num_quality} for user {user_id}')
             num_quality = float('nan') if num_quality is None else num_quality
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
