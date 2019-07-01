@@ -19,7 +19,7 @@ import civilservant.logs
 from civilservant.wikipedia.utils import get_namespace_fn, add_experience_bin
 from sqlalchemy import exc
 
-from data_gathering_jobs import add_labour_hours
+from data_gathering_jobs import add_labour_hours, add_total_recent_edits
 
 civilservant.logs.initialize()
 import logging
@@ -255,6 +255,12 @@ class thankerOnboarder():
                               start_date=self.observation_start_date,
                               end_date=self.experiment_start_date,
                               wmf_con=self.wmf_con, col_label="labor_hours_84_pre_treatment")
+
+        logging.info(f'adding total edits. shape of df is {df.shape}')
+        df = add_total_recent_edits(df, lang,
+                              start_date=self.observation_start_date,
+                              end_date=self.experiment_start_date,
+                              wmf_con=self.wmf_con, col_label="total_edits_84_pre_treatment")
 
         logging.info(f'adding reverts, shape of df is {df.shape}')
         df = self.add_reverting_actions(df, lang)

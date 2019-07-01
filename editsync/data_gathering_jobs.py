@@ -66,6 +66,14 @@ def add_labour_hours(df, lang, col_label, wmf_con, start_date, end_date):
                         timestamp_list_fn=calc_labour_hours, edit_getter_fn=get_timestamps_within_range,
                         start_date=start_date, end_date=end_date)
 
+
+def add_total_recent_edits(df, lang, col_label, wmf_con, start_date, end_date):
+    """ get the labour hour of a users in a df and lang between start and end dates"""
+    return add_edits_fn(df=df, lang=lang, col_label=col_label, wmf_con=wmf_con,
+                        timestamp_list_fn=len, edit_getter_fn=get_timestamps_within_range,
+                        start_date=start_date, end_date=end_date)
+
+
 def add_edits_fn(df, lang, col_label, wmf_con, timestamp_list_fn, edit_getter_fn, start_date=None, end_date=None):
     '''add the number of edits a user made within range'''
     edit_measure_dfs =[]
