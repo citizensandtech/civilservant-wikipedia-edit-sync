@@ -126,7 +126,7 @@ class thankeeOnboarder():
             if "num_prev_thanks_pre_sample" not in df.columns:
                 df = add_thanks_receiving(df, lang,
                                           start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
-                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
+                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_84_pre_sample')
                 self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
 
             logging.info(f"Group {lang}-{group_name} Saving {len(df)} as included.")
@@ -163,7 +163,8 @@ class thankeeOnboarder():
 
         # take a shortcut if it's configured
         if self.max_onboarders_to_check:
-            group_df = group_df[:self.max_onboarders_to_check]
+            # group_df = group_df[:self.max_onboarders_to_check]
+            group_df = group_df.sample(self.max_onboarders_to_check)
 
         needing_saving = group_df[
             group_df['user_id'].apply(lambda uid: uid not in [u.user_id for u in known_users])]
