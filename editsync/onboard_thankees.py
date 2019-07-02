@@ -126,7 +126,7 @@ class thankeeOnboarder():
             if "num_prev_thanks_pre_sample" not in df.columns:
                 df = add_thanks_receiving(df, lang,
                                           start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
-                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_84_pre_sample')
+                                          wmf_con=self.wmf_con, col_label='num_prev_thanks_pre_sample')
                 self.df_to_db_col(lang, df, 'num_prev_thanks_pre_sample')
 
             logging.info(f"Group {lang}-{group_name} Saving {len(df)} as included.")
