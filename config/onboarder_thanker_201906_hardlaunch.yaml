@@ -2,8 +2,8 @@ langs:
   pl:
     consented_file_raw: pl_consent_6_26.csv
     consented_file: pl_consent_6_26_clean.csv
-    survey_file_raw: pl_survey_6_26.csv
-    survey_file: pl_survey_6_26_clean.csv
+    survey_file_raw: pl_survey_6_30.csv
+    survey_file: pl_survey_6_30_clean.csv
     superthanker_file: pl_superthankers.csv
   ar:
     consented_file_raw: ar_consent_6_26.csv
@@ -14,14 +14,14 @@ langs:
   de:
     consented_file_raw: de_consent_6_26.csv
     consented_file: de_consent_6_26_clean.csv
-    survey_file_raw: de_survey_6_26.csv
-    survey_file: de_survey_6_26_clean.csv
+    survey_file_raw: de_survey_6_30.csv
+    survey_file: de_survey_6_30_clean.csv
     superthanker_file: de_superthankers.csv
   fa:
     consented_file_raw: fa_consent_6_26.csv
     consented_file: fa_consent_6_26_clean.csv
-    survey_file_raw: fa_survey_6_26.csv
-    survey_file: fa_survey_6_26_clean.csv
+    survey_file_raw: fa_survey_6_30.csv
+    survey_file: fa_survey_6_30_clean.csv
     superthanker_file: fa_superthankers.csv
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
