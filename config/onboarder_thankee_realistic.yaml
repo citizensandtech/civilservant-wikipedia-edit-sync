@@ -7,6 +7,15 @@ langs:
         experience_levels:
           - bin_0
         user_count: 120
+      experienced:
+        experience_levels:
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 2400
   ar:
     min_rev_id: 33850000
     groups:
