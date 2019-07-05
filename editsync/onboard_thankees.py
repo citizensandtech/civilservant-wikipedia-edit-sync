@@ -316,15 +316,16 @@ class thankeeOnboarder():
         edits_to_add = []
         ets_to_add = []
         for rev_id, display_datum in display_data.items():
+            edit_id = f'edit:{lang}:{rev_id}'
             edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.id}
-            edit = {**edit_meta, **display_datum}
+            edit = {**edit_meta, **display_datum, **{id:edit_id}}
             # from IPython import embed; embed()
             edit_to_add = edits(**edit)
             edits_to_add.append(edit_to_add)
 
             et_to_add = ExperimentThing(
-                id=f'edit:{lang}:{rev_id}',
-                thing_id=None,
+                id=edit_id,
+                thing_id=edit_id,
                 experiment_id=-10,
                 randomization_condition=None,
                 randomization_arm=None,
