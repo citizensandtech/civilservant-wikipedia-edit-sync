@@ -43,7 +43,8 @@ class thankeeOnboarder():
         self.wmf_con = make_wmf_con()
         self.db_session = init_session() if not db_session_replacement else db_session_replacement
         self.experiment_start_date = config['experiment_start_date']
-        self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(days=config['observation_back_days'])
+        self.onboarding_earliest_active_date = self.experiment_start_date - timedelta(
+            days=config['observation_back_days'])
         self.onboarding_latest_active_date = datetime.utcnow()
         self.populations = defaultdict(dict)
         self.namespace_fn = get_namespace_fn(config['namespace_fn'])
@@ -74,9 +75,9 @@ class thankeeOnboarder():
         """
         # Get the active users
         active_users = self.get_active_users(lang, start_date=self.onboarding_earliest_active_date,
-                                        end_date=self.onboarding_latest_active_date,
-                                        min_rev_id=self.langs[lang]['min_rev_id'],
-                                        wmf_con=self.wmf_con)
+                                             end_date=self.onboarding_latest_active_date,
+                                             min_rev_id=self.langs[lang]['min_rev_id'],
+                                             wmf_con=self.wmf_con)
         # active_users.to_csv(f'active_users.{lang}.csv')
         # Subset to: - minimum edits
         active_users_min_edits = active_users[
@@ -94,7 +95,8 @@ class thankeeOnboarder():
         groups = self.config['langs'][lang]['groups']
         for group_name, inclusion_criteria in groups.items():
             df = self.get_quality_data_for_group(super_group=active_users_min_edits_nonthanker_exp,
-                                                 lang=lang, group_name=group_name, inclusion_criteria=inclusion_criteria)
+                                                 lang=lang, group_name=group_name,
+                                                 inclusion_criteria=inclusion_criteria)
 
             ## Nota Bene. This is where things ge a bit wonky.
             # 1. at first I thought that I would store the user state in a candidates table, and in fact
@@ -113,7 +115,8 @@ class thankeeOnboarder():
             logging.info('adding labour hours')
             if "labor_hours_84_days_pre_sample" not in df.columns:
                 df = add_labour_hours(df, lang,
-                                      start_date=self.onboarding_earliest_active_date, end_date=self.onboarding_latest_active_date,
+                                      start_date=self.onboarding_earliest_active_date,
+                                      end_date=self.onboarding_latest_active_date,
                                       wmf_con=self.wmf_con, col_label="labor_hours_84_days_pre_sample")
                 self.df_to_db_col(lang, df, 'labor_hours_84_days_pre_sample')
 
@@ -133,7 +136,6 @@ class thankeeOnboarder():
             logging.info(f"Group {lang}-{group_name} Saving {len(df)} as included.")
             df['user_included'] = True
             self.df_to_db_col(lang, df, 'user_included')
-
 
     def get_quality_data_for_group(self, super_group, lang, group_name, inclusion_criteria=None):
         logging.info(f"Working on group {lang}-{group_name}.")
@@ -199,7 +201,6 @@ class thankeeOnboarder():
         group_min_qual_incl = group_min_qual.sample(n=target_user_count)
 
         return group_min_qual_incl
-
 
     def add_num_quality_df(self, df, lang):
         """
@@ -322,18 +323,19 @@ class thankeeOnboarder():
             edits_to_add.append(edit_to_add)
 
             et_to_add = ExperimentThing(
-                            id=f'edit:{lang}:{rev_id}',
-                            thing_id=None,
-                            experiment_id=-10,
-                            randomization_condition=None,
-                            randomization_arm=None,
-                            object_platform=PlatformType.WIKIPEDIA,
-                            object_type=ThingType.WIKIPEDIA_EDIT,
-                            object_created_dt=datetime.utcnow(),
-                            query_index=f'user:{refresh_user.lang}:{refresh_user.user_id}', #make it easy to lookup the edits of a user later
-                            syncable=True,
-                            synced_dt=None,
-                            metadata_json=edit)
+                id=f'edit:{lang}:{rev_id}',
+                thing_id=None,
+                experiment_id=-10,
+                randomization_condition=None,
+                randomization_arm=None,
+                object_platform=PlatformType.WIKIPEDIA,
+                object_type=ThingType.WIKIPEDIA_EDIT,
+                object_created_dt=datetime.utcnow(),
+                query_index=f'user:{refresh_user.lang}:{refresh_user.user_id}',
+                # make it easy to lookup the edits of a user later
+                syncable=True,
+                synced_dt=None,
+                metadata_json={'sync_object': edit})
 
             ets_to_add.append(et_to_add)
 
@@ -366,7 +368,6 @@ class thankeeOnboarder():
             self.db_session.add_all(user_refresh_ets)
             self.db_session.commit()
 
-
     def output_population(self):
         # if we've processed every lang
         out_fname = f"all-thankees-historical-{date.today().strftime('%Y%m%d')}.csv"
@@ -376,7 +377,7 @@ class thankeeOnboarder():
         out_f = os.path.join(out_base, out_fname)
 
         # now doing it the sqlalchemy way
-        all_included_users = self.db_session.query(candidates).filter(candidates.user_included==True)
+        all_included_users = self.db_session.query(candidates).filter(candidates.user_included == True)
 
         out_df = pd.read_sql(all_included_users.statement, all_included_users.session.bind)
         # now
@@ -384,7 +385,6 @@ class thankeeOnboarder():
 
         logging.info(f"outputted data to: {out_f}")
         out_df.to_csv(out_f, index=False)
-
 
     def receive_active_uncompleted_users(self, lang):
         """
@@ -401,9 +401,10 @@ class thankeeOnboarder():
         thankers_ls = os.listdir(thankers_d)
         thankers_ls_lang = [f for f in thankers_ls if f.startswith(lang)]
         try:
-            thankers_f = os.path.join(self.config['dirs']['project'], self.config['dirs']['thankers'], thankers_ls_lang[0])
+            thankers_f = os.path.join(self.config['dirs']['project'], self.config['dirs']['thankers'],
+                                      thankers_ls_lang[0])
             thankers = pd.read_csv(thankers_f)
-            thankers_lang = thankers[thankers['lang']==lang]
+            thankers_lang = thankers[thankers['lang'] == lang]
             self.users_in_thanker_experiment[lang] = thankers_lang['user_id'].values
             logging.info(f'loaded {len(self.users_in_thanker_experiment[lang])} thankers')
         except IndexError:
