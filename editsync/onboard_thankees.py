@@ -313,19 +313,19 @@ class thankeeOnboarder():
         logging.info(f"getting display data for {len(revs_to_get)} revs for user {refresh_user.id}")
         display_data = get_display_data(list(revs_to_get), lang)
 
-        edits_to_add = []
-        ets_to_add = []
         for rev_id, display_datum in display_data.items():
-            edit_id = f'edit:{lang}:{rev_id}'
             edit_meta = {"lang": lang, "rev_id": rev_id, "candidate_id": refresh_user.id}
-            edit = {**edit_meta, **display_datum, **{id:edit_id}}
+            edit = {**edit_meta, **display_datum}
             # from IPython import embed; embed()
             edit_to_add = edits(**edit)
-            edits_to_add.append(edit_to_add)
+            self.db_session.add(edit_to_add)
+            self.db_session.flush()
+
+            edit_autoincrement_id = edit_to_add.id
 
             et_to_add = ExperimentThing(
-                id=edit_id,
-                thing_id=edit_id,
+                id=f'edit:{lang}:{rev_id}',
+                thing_id=edit_autoincrement_id,
                 experiment_id=-10,
                 randomization_condition=None,
                 randomization_arm=None,
@@ -338,9 +338,9 @@ class thankeeOnboarder():
                 synced_dt=None,
                 metadata_json={'sync_object': edit})
 
-            ets_to_add.append(et_to_add)
+            self.db_session.add(et_to_add)
+            self.db_session.commit()
 
-        return edits_to_add, ets_to_add
 
     def refresh_edits(self, lang):
         """
@@ -359,15 +359,8 @@ class thankeeOnboarder():
 
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
         for refresh_user in refresh_users:
-            user_refresh_data, user_refresh_ets = self.refresh_user_edits_comparative(refresh_user, lang)
+            self.refresh_user_edits_comparative(refresh_user, lang)
 
-            # add our local rows that are *wide*
-            self.db_session.add_all(user_refresh_data)
-            self.db_session.commit()
-
-            # add in the experiment thing way
-            self.db_session.add_all(user_refresh_ets)
-            self.db_session.commit()
 
     def output_population(self):
         # if we've processed every lang
