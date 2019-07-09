@@ -307,7 +307,10 @@ class thankeeOnboarder():
 
         new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con, exclusion_rev_ids=already_revs)
         # revisions needing getting = revs - already
-        revs_to_get = set(new_user_revs['rev_id'].values)
+        if len(new_user_revs) == 0:
+            revs_to_get = []
+        else:
+            revs_to_get = set(new_user_revs['rev_id'].values)
 
         # get and store.
         logging.info(f"getting display data for {len(revs_to_get)} revs for user {refresh_user.id}")
@@ -341,7 +344,6 @@ class thankeeOnboarder():
             self.db_session.add(et_to_add)
             self.db_session.commit()
 
-
     def refresh_edits(self, lang):
         """
         - update last k edits of included, not completed users
@@ -360,7 +362,6 @@ class thankeeOnboarder():
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
         for refresh_user in refresh_users:
             self.refresh_user_edits_comparative(refresh_user, lang)
-
 
     def output_population(self):
         # if we've processed every lang
