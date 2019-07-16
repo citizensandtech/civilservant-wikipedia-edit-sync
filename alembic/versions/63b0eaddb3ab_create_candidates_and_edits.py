@@ -36,7 +36,7 @@ def upgrade():
     sa.Column('user_completed', sa.Boolean(), nullable=True),
     sa.Column('user_included', sa.Boolean(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
-    mysql_charset='utf8',
+    mysql_charset='utf8', #TODO needs to be utf8mb4
     mysql_collate='utf8_general_ci',
     mysql_engine='InnoDB'
     )

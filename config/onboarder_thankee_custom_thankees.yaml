@@ -1,0 +1,33 @@
+# these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
+langs:
+  en:
+    min_rev_id: 25800000
+    custom_users:
+      - Maximilianklein
+      - Rubberpaw
+      - Juliakamin
+      - Mardetanha
+      - Favonian
+      - Ladsgroup
+    groups:
+      any:
+        experience_levels:
+          - bin_0
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 100
+
+
+dirs:
+  project: /data/project/thankee
+  output: historical_output
+  thankers: thankers_to_exclude
+
+experiment_start_date: 2019-07-16
+observation_back_days: 84
+min_edit_count: 4
+namespace_fn: non-talk

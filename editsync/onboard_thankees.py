@@ -11,7 +11,7 @@ import yaml
 import civilservant.logs
 from civilservant.util import PlatformType, ThingType
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
-from civilservant.wikipedia.queries.users import get_active_users
+from civilservant.wikipedia.queries.users import get_active_users, get_specific_users
 # from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 
@@ -55,7 +55,7 @@ class thankeeOnboarder():
         else:
             self.max_onboarders_to_check = None
 
-        self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], }
+        self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], "en": [] }
 
         self.q = Queue(name='onboarder_thankee', connection=Redis())
         self.failed_q = Queue(name='failed', connection=Redis())
@@ -74,11 +74,15 @@ class thankeeOnboarder():
         - add labour hours
         """
         # Get the active users
-        active_users = self.get_active_users(lang, start_date=self.onboarding_earliest_active_date,
-                                             end_date=self.onboarding_latest_active_date,
-                                             min_rev_id=self.langs[lang]['min_rev_id'],
-                                             wmf_con=self.wmf_con)
-        # active_users.to_csv(f'active_users.{lang}.csv')
+        if "custom_users" in self.config["langs"][lang].keys():
+            # not sampling active users but cheating with custom_users list
+            active_users = get_specific_users(lang, self.config['langs'][lang]["custom_users"], wmf_con=self.wmf_con)
+        else:
+            active_users = self.get_active_users(lang, start_date=self.onboarding_earliest_active_date,
+                                                 end_date=self.onboarding_latest_active_date,
+                                                 min_rev_id=self.langs[lang]['min_rev_id'],
+                                                 wmf_con=self.wmf_con)
+        #  active_users.to_csv(f'active_users.{lang}.csv')
         # Subset to: - minimum edits
         active_users_min_edits = active_users[
             active_users['user_editcount'] >= self.min_edit_count]  # need to have at least this many edits
