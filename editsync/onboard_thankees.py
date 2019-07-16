@@ -231,7 +231,7 @@ class thankeeOnboarder():
         while not queue_successufully_ran:
             queue_results = []
             for user_id in user_to_job:
-                queue_result = self.q.enqueue(f=add_num_quality_user, args=(user_id, lang, self.config['namespace_fn']))
+                queue_result = self.q.enqueue(f=add_num_quality_user, args=(user_id, lang, self.config['namespace_fn']), job_timeout="10m")
                 queue_results.append({"user_id": user_id, "job": queue_result})
 
             while not self.q.is_empty():

@@ -1,0 +1,33 @@
+project_dir: /data/project/thanker
+randomizations_dir: randomization_output
+randomizations_file: en-thanker-randomization-datadrill-20190716.csv
+
+
+csv_db_map:
+  thing_id: anonymized_id
+
+
+cols_to_save:
+    - user_name
+    - anonymized_id
+    - user_id
+    - num_reverts_84_pre_treatment
+    - wikithank_84_pre_treatment
+    - wikilove_84_pre_treatment
+    - is_official_bot
+    - block_actions_84_pre_treatment
+    - project_talk_84_pre_treatment
+    - support_talk_84_pre_treatment
+    - has_email
+    - pre_newcomer_capability
+    - pre_newcomer_intent
+    - pre_emotionally_draining
+    - pre_feel_positive
+    - pre_monitoring_damaging_content
+    - pre_mentoring
+    - lang
+    - supportive_84_pre_treatment
+    - protective_84_pre_treatment
+    - randomization_protectiveness_index
+    - randomization_block_id
+    - randomization_block_size
