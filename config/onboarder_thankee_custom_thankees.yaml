@@ -280,11 +280,11 @@ langs:
   pl:
     min_rev_id: 25800000
     custom_users:
-          - Agnieszka Marszał (WMPL)
-          - Celina Strzelecka (WMPL)
-          - Natalia Szafran-Kozakowska (WMPL)
-          - WMPL
-          - Wojciech Pędzich (WMPL)
+        - Agnieszka Marszał (WMPL)
+        - Celina Strzelecka (WMPL)
+        - Natalia Szafran-Kozakowska (WMPL)
+        - WMPL
+        - Wojciech Pędzich (WMPL)
         - ABorba (WMF)
         - ACella (WMF)
         - ACraze (WMF)
@@ -527,7 +527,6 @@ langs:
         - Samwalton9 (WMF)
         - SandraF (WMF)
         - Sbisson (WMF)
-        - "Sec""'\042\047\u0022\076\x3ETest (WMF)"
         - Seddon (WMF)
         - Selsharbaty (WMF)
         - Sharihareswara (WMF)
