@@ -39,7 +39,7 @@ class randomizationUploader():
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
-            et_id = f'user:{row["lang"]}:{row["user_id"]}'
+            et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
             logging.info(f'attempting id {et_id}')
             existing_id_record = self.db_session.query(ExperimentThing).filter(
                 ExperimentThing.id == et_id).one_or_none()
