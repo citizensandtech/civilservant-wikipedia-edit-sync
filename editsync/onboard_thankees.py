@@ -383,7 +383,7 @@ class thankeeOnboarder():
         out_df = out_df.rename(columns={'user_experience_level': 'prev_experience'})
 
         logging.info(f"outputted data to: {out_f}")
-        out_df.to_csv(out_f, index=False)
+        out_df.to_csv(out_f, index=False, date_format='%Y-%m-%dT%H:%M:%SZ')
 
     def receive_active_uncompleted_users(self, lang):
         """
@@ -429,7 +429,7 @@ class thankeeOnboarder():
                 self.refresh_edits(lang)
                 self.send_included_users_edits_to_cs_hq(lang)
         # final stage
-        if fn == 'onboard':
+        if fn == 'onboard' or fn =='output_pop':
             self.output_population()
 
 

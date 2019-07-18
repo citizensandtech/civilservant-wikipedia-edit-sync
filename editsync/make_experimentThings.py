@@ -32,18 +32,39 @@ class randomizationUploader():
     def read_input(self):
         self.randomizations_f = os.path.join(self.config['project_dir'], self.config['randomizations_dir'],
                                              self.config['randomizations_file'])
-        self.df = pd.read_csv(self.randomizations_f)
+        logging.info(f"trying to read {self.randomizations_f}")
+        df = pd.read_csv(self.randomizations_f)
+        df = df.rename(columns={'prev_experience': 'user_experience_level'})
+        self.df = df
 
     def upload(self, cols_to_save, thanker_thankee):
         self.ets_to_add = []
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
-            if thanker_thankee == 'thanker':
+
+            # backwards compatibility
+            if not ("superthanker" in row.keys()):
+                row['superthanker'] = False
+
+            if thanker_thankee == 'thankers':
+                # THANKER details
                 experiment_id = -1
-            elif thanker_thankee == 'thankee':
+                et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
+                if row["superthanker"] == True:
+                    randomization_condition = "superthanker"
+                    randomization_arm = None
+                else:
+                    randomization_condition = "main"
+                    randomization_arm = row["randomization_arm"]
+                syncable = False
+            elif thanker_thankee == 'thankees':
+                # THANKEE details
                 experiment_id = -3
-            et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
+                et_id = f'user_id:{row["lang"]}:{row["user_id"]}'
+                randomization_condition = 'thankee'
+                randomization_arm = row["randomization_arm"]
+                syncable = True
             logging.info(f'attempting id {et_id}')
             existing_id_record = self.db_session.query(ExperimentThing).filter(
                 ExperimentThing.id == et_id).one_or_none()
@@ -54,15 +75,15 @@ class randomizationUploader():
                     id=et_id,
                     thing_id=row["anonymized_id"],
                     experiment_id=experiment_id,
-                    randomization_condition='main',
-                    randomization_arm=row["randomization_arm"],
+                    randomization_condition=randomization_condition,
+                    randomization_arm=randomization_arm,
                     object_platform=PlatformType.WIKIPEDIA,
                     object_type=ThingType.WIKIPEDIA_USER,
                     object_created_dt=None,
                     query_index=None,
-                    syncable=True,
+                    syncable=syncable,
                     synced_dt=None,
-                    metadata_json=row_map)
+                    metadata_json={'sync_object': row_map})
                 self.ets_to_add.append(et)
             self.db_session.add_all(self.ets_to_add)
             self.db_session.commit()
@@ -74,10 +95,12 @@ class randomizationUploader():
 
     def confirm_upload(self):
         curr_num_experiment_things = self.num_experiment_things()
-        logging.info(f'experiment things. initially {self.inital_num_experiment_things}, added {len(self.ets_to_add)}, ended {curr_num_experiment_things}')
+        logging.info(
+            f'experiment things. initially {self.inital_num_experiment_things}, added {len(self.ets_to_add)}, ended {curr_num_experiment_things}')
         assert self.inital_num_experiment_things + len(self.ets_to_add) == curr_num_experiment_things
 
     def run(self, fn):
+        logging.info(f"fn is {fn}")
         if fn == 'thankers':
             cols_to_save = self.config['cols_to_save']
             self.read_input()
@@ -96,6 +119,7 @@ class randomizationUploader():
 def run_onboard(fn, config):
     # config_file = os.getenv('ONBOARDER_CONFIG', config)
     uploader = randomizationUploader(config, fn)
+    assert fn in ['thankers', 'thankees'], "fn must be one of 'thanker' or 'thankee'"
     uploader.run(fn)
 
 
