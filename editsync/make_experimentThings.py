@@ -39,6 +39,10 @@ class randomizationUploader():
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
+            if thanker_thankee == 'thanker':
+                experiment_id = -1
+            elif thanker_thankee == 'thankee':
+                experiment_id = -3
             et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
             logging.info(f'attempting id {et_id}')
             existing_id_record = self.db_session.query(ExperimentThing).filter(
@@ -49,7 +53,7 @@ class randomizationUploader():
                 et = ExperimentThing(
                     id=et_id,
                     thing_id=row["anonymized_id"],
-                    experiment_id=-1 if thanker_thankee == 'thanker' else -2,
+                    experiment_id=experiment_id,
                     randomization_condition='main',
                     randomization_arm=row["randomization_arm"],
                     object_platform=PlatformType.WIKIPEDIA,
