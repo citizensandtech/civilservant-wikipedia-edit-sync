@@ -73,7 +73,7 @@ class randomizationUploader():
             else:
                 et = ExperimentThing(
                     id=et_id,
-                    thing_id=row["anonymized_id"],
+                    thing_id="not_in_use", # row["anonymized_id"],
                     experiment_id=experiment_id,
                     randomization_condition=randomization_condition,
                     randomization_arm=randomization_arm,
