@@ -25,6 +25,7 @@ class randomizationUploader():
         self.db_session = init_session()
         self.inital_num_experiment_things = self.num_experiment_things()
         self.df = None
+        self.ets_to_add = []
 
     def num_experiment_things(self):
         return self.db_session.query(ExperimentThing).count()
@@ -38,19 +39,19 @@ class randomizationUploader():
         self.df = df
 
     def upload(self, cols_to_save, thanker_thankee):
-        self.ets_to_add = []
+
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
-
-            # backwards compatibility
-            if not ("superthanker" in row.keys()):
-                row['superthanker'] = False
 
             if thanker_thankee == 'thankers':
                 # THANKER details
                 experiment_id = -1
                 et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
+
+                # backwards compatibility
+                if not ("superthanker" in row.keys()):
+                    row['superthanker'] = False
                 if row["superthanker"] == True:
                     randomization_condition = "superthanker"
                     randomization_arm = None
@@ -60,11 +61,18 @@ class randomizationUploader():
                 syncable = False
             elif thanker_thankee == 'thankees':
                 # THANKEE details
-                experiment_id = -3
-                et_id = f'user_id:{row["lang"]}:{row["user_id"]}'
-                randomization_condition = 'thankee'
+                # first check that this thankee is in the thanking randomization condition
                 randomization_arm = row["randomization_arm"]
+                assert randomization_arm in [0, 1], "randomization arm needs to be 0 or 1"
+                et_id = f'user_id:{row["lang"]}:{row["user_id"]}'
+                if randomization_arm == 0:
+                    logging.info(f"Not making an ET for {et_id} because their randomization arm is {randomization_arm}")
+                    continue
+                experiment_id = -3
+                randomization_condition = 'thankee'
                 syncable = True
+
+
             logging.info(f'attempting id {et_id}')
             existing_id_record = self.db_session.query(ExperimentThing).filter(
                 ExperimentThing.id == et_id).one_or_none()
