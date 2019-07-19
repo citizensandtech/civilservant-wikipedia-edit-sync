@@ -383,7 +383,7 @@ class thankeeOnboarder():
         out_df = out_df.rename(columns={'user_experience_level': 'prev_experience'})
 
         logging.info(f"outputted data to: {out_f}")
-        out_df.to_csv(out_f, index=False, date_format='%Y-%m-%dT%H:%M:%SZ')
+        out_df.to_csv(out_f, index=False, date_format='%Y-%m-%dT%H:%M:%S')
 
     def receive_active_uncompleted_users(self, lang):
         """
