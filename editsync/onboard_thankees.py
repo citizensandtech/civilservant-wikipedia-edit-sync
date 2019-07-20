@@ -316,6 +316,12 @@ class thankeeOnboarder():
         already_revs = [int(s.split(':')[2]) for s in already_et_lang_revids]
         logging.debug(f"I think that {refresh_user.user_name}, made the revs {already_revs[:10]} (limited to 10): ")
 
+        if "fast_refresh" in self.config:
+            if len(already_et_lang_revids) > max(4, self.config["fast_refresh"]):
+                logging.info(f"Not doing anything for '{refresh_user.id}' just to save time.")
+                return
+
+
         # already_revs_res = self.db_session.query(edits).filter(edits.lang == lang).filter(
         #     edits.candidate_id == refresh_user.id).all()
         # already_revs = set([r.rev_id for r in already_revs_res])
