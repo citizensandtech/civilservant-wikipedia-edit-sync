@@ -378,7 +378,19 @@ class thankeeOnboarder():
 
         logging.info(f"found {len(refresh_users)} users to refresh for {lang}.")
         for refresh_user in refresh_users:
-            self.refresh_user_edits_comparative(refresh_user, lang)
+
+            et_user_id = f"user_id:{lang}:{refresh_user.user_id}"
+            et_user = self.db_session.query(ExperimentThing).filter(ExperimentThing.experiment_id==-3) \
+                .filter(ExperimentThing.id==et_user_id).first()
+
+            candidate_has_et = True if et_user else False
+
+            if candidate_has_et:
+                logging.info(f'Candidate {lang}:{refresh_user.user_name} aka {et_user_id} has an experiment thing, so I am refreshing')
+                self.refresh_user_edits_comparative(refresh_user, lang)
+            else:
+                logging.info(f'Candidate {lang}:{refresh_user.user_name} has not et, so skipping.')
+                continue
 
     def output_population(self):
         # if we've processed every lang
