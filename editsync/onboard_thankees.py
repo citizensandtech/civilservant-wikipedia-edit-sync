@@ -303,24 +303,27 @@ class thankeeOnboarder():
         # do this in a user-oriented way, or a process-oriented way?
         # revisions of users
         small_user_df = pd.DataFrame({"user_id": [refresh_user.user_id]})
-        logging.info(f"starting to get quality edits for user{lang}-{refresh_user.user_id}")
+        logging.info(f"starting to get quality edits for user {lang}:{refresh_user.user_id}")
         # already received revisions
 
         et_query_index = f'user:{lang}:{refresh_user.user_id}'
-        logging.info(f"exp thing query str is: {et_query_index}")
+        logging.debug(f"exp thing query str is: {et_query_index}")
         already_ets = self.db_session.query(ExperimentThing).filter(ExperimentThing.experiment_id == -10) \
             .filter(ExperimentThing.query_index == et_query_index).all()
 
         already_et_lang_revids = [already_et.id for already_et in already_ets]
         # edit:en:906694307
         already_revs = [int(s.split(':')[2]) for s in already_et_lang_revids]
+        logging.debug(f"I think that {refresh_user.user_name}, made the revs {already_revs[:10]} (limited to 10): ")
 
         # already_revs_res = self.db_session.query(edits).filter(edits.lang == lang).filter(
         #     edits.candidate_id == refresh_user.id).all()
         # already_revs = set([r.rev_id for r in already_revs_res])
         logging.info(f"already have {len(already_revs)} revs for user {refresh_user.user_id}")
 
-        new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con, exclusion_rev_ids=already_revs)
+        new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con,
+                                                   namespace_fn=self.config['namespace_fn'],
+                                                   exclusion_rev_ids=already_revs)
         # revisions needing getting = revs - already
         if len(new_user_revs) == 0:
             revs_to_get = []
