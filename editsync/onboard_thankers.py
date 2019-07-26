@@ -339,8 +339,13 @@ class thankerOnboarder():
         s['lang'] = lang
         merged_df = pd.merge(t, s, how="left", on=['ID'], suffixes=("", "__survey"))
         merged_df = merged_df.rename(columns=self.qualtrics_map)
-        consented_no_survey = merged_df[pd.isnull(merged_df['StartDate__survey'])]  # why startdate__survey, just the first column i expect wuold have a value if merged correctly
-        consented_and_survey = merged_df[pd.notnull(merged_df['StartDate__survey'])]
+        # cols to remove ResponseId__survey  anonymized_id ResponseId
+        pii_cols = ['anonymized_id', 'ResponseId', 'ResponseId__survey']
+        all_cols = merged_df.columns
+        non_pii_cols = [col for col in all_cols if col not in pii_cols]
+        merged_df_non_pii = merged_df[non_pii_cols]
+        consented_no_survey = merged_df_non_pii[pd.isnull(merged_df_non_pii['StartDate__survey'])]  # why startdate__survey, just the first column i expect wuold have a value if merged correctly
+        consented_and_survey = merged_df_non_pii[pd.notnull(merged_df_non_pii['StartDate__survey'])]
         self.merged[lang] = consented_and_survey
         self.merged_no_survey[lang] = consented_no_survey
 

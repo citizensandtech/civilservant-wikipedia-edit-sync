@@ -11,7 +11,7 @@ import yaml
 import civilservant.logs
 from civilservant.util import PlatformType, ThingType
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
-from civilservant.wikipedia.queries.users import get_active_users, get_specific_users
+from civilservant.wikipedia.queries.users import get_active_users, get_specific_users, get_official_bots
 # from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 
@@ -55,7 +55,7 @@ class thankeeOnboarder():
         else:
             self.max_onboarders_to_check = None
 
-        self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], "en": [] }
+        self.users_in_thanker_experiment = {"ar": [], "de": [], "fa": [], "pl": [], "en": []}
 
         self.q = Queue(name='onboarder_thankee', connection=Redis())
         self.failed_q = Queue(name='failed', connection=Redis())
@@ -83,8 +83,17 @@ class thankeeOnboarder():
                                                  min_rev_id=self.langs[lang]['min_rev_id'],
                                                  wmf_con=self.wmf_con)
         #  active_users.to_csv(f'active_users.{lang}.csv')
+
+        active_users_bots = self.add_bots(active_users, lang)
+
+        logging.info(f"lenght of active users before bot check {len(active_users_bots)}")
+        active_users_no_bots = active_users_bots[active_users_bots['is_official_bot'] == False]
+        bots = active_users_bots[active_users_bots['is_official_bot'] == True]
+        logging.info(f"lenght of active users after bot check {len(active_users_no_bots)}")
+
+        logging.info(f"active bots are {bots[['user_name','user_editcount']]}")
         # Subset to: - minimum edits
-        active_users_min_edits = active_users[
+        active_users_min_edits = active_users_no_bots[
             active_users['user_editcount'] >= self.min_edit_count]  # need to have at least this many edits
         # Subset to non-thanker experiment
         active_users_min_edits_nonthanker = active_users_min_edits[
@@ -92,6 +101,7 @@ class thankeeOnboarder():
         # Add experience levels
         active_users_min_edits_nonthanker_exp = add_experience_bin(active_users_min_edits_nonthanker,
                                                                    self.experiment_start_date)
+
         logging.info(
             f"Group {lang} has {len(active_users_min_edits_nonthanker_exp)} active users with 4 edits in history.")
 
@@ -231,7 +241,8 @@ class thankeeOnboarder():
         while not queue_successufully_ran:
             queue_results = []
             for user_id in user_to_job:
-                queue_result = self.q.enqueue(f=add_num_quality_user, args=(user_id, lang, self.config['namespace_fn']), job_timeout="10m")
+                queue_result = self.q.enqueue(f=add_num_quality_user, args=(user_id, lang, self.config['namespace_fn']),
+                                              job_timeout="10m")
                 queue_results.append({"user_id": user_id, "job": queue_result})
 
             while not self.q.is_empty():
@@ -263,6 +274,14 @@ class thankeeOnboarder():
 
         quality_counts_df = pd.concat(num_quality_dfs)
         df = pd.merge(df, quality_counts_df, how='left', on=['lang', 'user_id'])
+        return df
+
+    def add_bots(self, df, lang):
+        bots = get_official_bots(lang=lang, wmf_con=self.wmf_con)
+        logging.info(f"Found {len(bots)} official bots on {lang}")
+        df = pd.merge(df, bots, on=['user_id', 'lang'], how='left')
+        df['is_official_bot'] = df['is_official_bot'].fillna(False)
+        df['is_official_bot'] = df['is_official_bot'].apply(bool)
         return df
 
     def df_to_db(self, df):
@@ -314,13 +333,13 @@ class thankeeOnboarder():
         already_et_lang_revids = [already_et.id for already_et in already_ets]
         # edit:en:906694307
         already_revs = [int(s.split(':')[2]) for s in already_et_lang_revids]
-        logging.debug(f"I think that {refresh_user.user_name}, has already stored revs {already_revs[:10]} (limited to 10): ")
+        logging.debug(
+            f"I think that {refresh_user.user_name}, has already stored revs {already_revs[:10]} (limited to 10): ")
 
         if "fast_refresh" in self.config:
             if len(already_et_lang_revids) > max(4, self.config["fast_refresh"]):
                 logging.info(f"Not doing anything for '{refresh_user.user_id}' just to save time.")
                 return
-
 
         # already_revs_res = self.db_session.query(edits).filter(edits.lang == lang).filter(
         #     edits.candidate_id == refresh_user.id).all()
@@ -386,13 +405,14 @@ class thankeeOnboarder():
         for refresh_user in refresh_users:
 
             et_user_id = f"user_id:{lang}:{refresh_user.user_id}"
-            et_user = self.db_session.query(ExperimentThing).filter(ExperimentThing.experiment_id==-3) \
-                .filter(ExperimentThing.id==et_user_id).first()
+            et_user = self.db_session.query(ExperimentThing).filter(ExperimentThing.experiment_id == -3) \
+                .filter(ExperimentThing.id == et_user_id).first()
 
             candidate_has_et = True if et_user else False
 
             if candidate_has_et:
-                logging.info(f'Candidate {lang}:{refresh_user.user_name} aka {et_user_id} has an experiment thing, so I am refreshing')
+                logging.info(
+                    f'Candidate {lang}:{refresh_user.user_name} aka {et_user_id} has an experiment thing, so I am refreshing')
                 self.refresh_user_edits_comparative(refresh_user, lang)
             else:
                 logging.info(f'Candidate {lang}:{refresh_user.user_name} has not et, so skipping.')
@@ -460,7 +480,7 @@ class thankeeOnboarder():
                 self.refresh_edits(lang)
                 self.send_included_users_edits_to_cs_hq(lang)
         # final stage
-        if fn == 'onboard' or fn =='output_pop':
+        if fn == 'onboard' or fn == 'output_pop':
             self.output_population()
 
 
