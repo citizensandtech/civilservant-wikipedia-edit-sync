@@ -59,6 +59,7 @@ class randomizationUploader():
                     randomization_condition = "main"
                     randomization_arm = row["randomization_arm"]
                 syncable = False
+                randomization_block_id = row['randomization_block_id']
             elif thanker_thankee == 'thankees':
                 # THANKEE details
                 # first check that this thankee is in the thanking randomization condition
@@ -71,6 +72,7 @@ class randomizationUploader():
                 experiment_id = -3
                 randomization_condition = 'thankee'
                 syncable = True
+                randomization_block_id = row['randomization_block_id']
 
 
             logging.info(f'attempting id {et_id}')
@@ -91,7 +93,8 @@ class randomizationUploader():
                     query_index=None,
                     syncable=syncable,
                     synced_dt=None,
-                    metadata_json={'sync_object': row_map})
+                    metadata_json={'sync_object': row_map,
+                                   'randomization_block_id':randomization_block_id})
                 self.ets_to_add.append(et)
             self.db_session.add_all(self.ets_to_add)
             self.db_session.commit()
