@@ -339,8 +339,8 @@ class thankerOnboarder():
         s['lang'] = lang
         merged_df = pd.merge(t, s, how="left", on=['ID'], suffixes=("", "__survey"))
         merged_df = merged_df.rename(columns=self.qualtrics_map)
-        # cols to remove ResponseId__survey  anonymized_id ResponseId
-        pii_cols = ['anonymized_id', 'ResponseId', 'ResponseId__survey']
+        # cols to remove user_email
+        pii_cols = ['ResponseId', 'user_email']
         all_cols = merged_df.columns
         non_pii_cols = [col for col in all_cols if col not in pii_cols]
         merged_df_non_pii = merged_df[non_pii_cols]
