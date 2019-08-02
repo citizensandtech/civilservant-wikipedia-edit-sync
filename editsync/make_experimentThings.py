@@ -10,6 +10,7 @@ from civilservant.db import init_session
 from civilservant.models.core import ExperimentThing
 import yaml
 from civilservant.util import PlatformType, ThingType
+from civilservant.wikipedia.queries.users import normalize_user_name_get_user_id_api
 
 civilservant.logs.initialize()
 import logging
@@ -38,17 +39,29 @@ class randomizationUploader():
         df = df.rename(columns={'prev_experience': 'user_experience_level'})
         self.df = df
 
+    def normalize_user_names(self):
+        self.df['user_name_resp'] = self.df[['user_name','lang']].apply(
+            lambda row: normalize_user_name_get_user_id_api(user_name=row['user_name'], lang=row['lang']), axis=1)
+        self.df['user_name'] = self.df['user_name_resp'].apply(lambda d: d['name'])
+
     def upload(self, cols_to_save, thanker_thankee):
 
         for i, row in self.df.iterrows():
             row = row.fillna(0)
             row_map = {c: row[c] for c in cols_to_save}
+            if thanker_thankee == 'superthankers':
+                experiment_id = -1
+                et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
+                randomization_condition = "superthanker"
+                randomization_arm = None
+                syncable = False
+                randomization_block_id = -1
+                randomization_block_size = -1
 
             if thanker_thankee == 'thankers':
                 # THANKER details
                 experiment_id = -1
                 et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
-
                 # backwards compatibility
                 if not ("superthanker" in row.keys()):
                     row['superthanker'] = False
@@ -124,6 +137,12 @@ class randomizationUploader():
             self.read_input()
             self.upload(cols_to_save, thanker_thankee=fn)
             self.confirm_upload()
+        if fn == 'superthankers':
+            cols_to_save = self.config['cols_to_save']
+            self.read_input()
+            self.normalize_user_names()
+            self.upload(cols_to_save, thanker_thankee=fn)
+            self.confirm_upload()
 
 
 @click.command()
@@ -132,10 +151,11 @@ class randomizationUploader():
 def run_onboard(fn, config):
     # config_file = os.getenv('ONBOARDER_CONFIG', config)
     uploader = randomizationUploader(config, fn)
-    assert fn in ['thankers', 'thankees'], "fn must be one of 'thanker' or 'thankee'"
+    assert fn in ['thankers', 'thankees', 'superthankers'], "fn must be one of 'thanker' or 'thankee'"
     uploader.run(fn)
 
 
 if __name__ == "__main__":
     logging.info("Starting randomization uploader")
     run_onboard()
+    logging.info("End randomization uploader")
