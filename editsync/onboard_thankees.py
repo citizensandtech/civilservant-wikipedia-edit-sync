@@ -413,7 +413,10 @@ class thankeeOnboarder():
             if candidate_has_et:
                 logging.info(
                     f'Candidate {lang}:{refresh_user.user_name} aka {et_user_id} has an experiment thing, so I am refreshing')
-                self.refresh_user_edits_comparative(refresh_user, lang)
+                try:
+                    self.refresh_user_edits_comparative(refresh_user, lang)
+                except Exception as e:
+                    logging.error(f"Couldn't refresh user lang:{lang} user{refresh_user.user_id}. Error: {e}")
             else:
                 logging.info(f'Candidate {lang}:{refresh_user.user_name} has not et, so skipping.')
                 continue
