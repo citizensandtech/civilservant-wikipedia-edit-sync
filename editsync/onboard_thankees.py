@@ -474,6 +474,7 @@ class thankeeOnboarder():
                 self.sample_population(lang)
             elif fn == "refresh":
                 self.refresh_edits(lang)
+                logging.info(f"Finishing refresh.")
             elif fn == "sync":
                 self.send_included_users_edits_to_cs_hq(lang)
             elif fn == "run":
@@ -496,5 +497,6 @@ def run_onboard(fn, config):
 
 
 if __name__ == "__main__":
-    logging.info("Starting Oboarder")
+    logging.info("Starting Onboarder")
     run_onboard()
+    logging.info("Ending Onboarder")
