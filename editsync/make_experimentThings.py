@@ -43,6 +43,7 @@ class randomizationUploader():
         self.df['user_name_resp'] = self.df[['user_name','lang']].apply(
             lambda row: normalize_user_name_get_user_id_api(user_name=row['user_name'], lang=row['lang']), axis=1)
         self.df['user_name'] = self.df['user_name_resp'].apply(lambda d: d['name'])
+        logging.debug(f"name normalization responses were: {self.df['user_name_resp']}")
 
     def upload(self, cols_to_save, thanker_thankee):
 
@@ -93,6 +94,7 @@ class randomizationUploader():
             existing_id_record = self.db_session.query(ExperimentThing).filter(
                 ExperimentThing.id == et_id).one_or_none()
             if existing_id_record:
+                logging.info(f"found existing entry for {et_id} nothing to do")
                 continue
             else:
                 et = ExperimentThing(
