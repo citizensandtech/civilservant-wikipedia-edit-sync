@@ -19,6 +19,7 @@ click = "*"
 redis = "*"
 rq = "*"
 pandas = "*"
+cryptography = "*"
 
 [requires]
 python_version = "3.7"

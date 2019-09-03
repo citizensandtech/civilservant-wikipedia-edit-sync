@@ -11,28 +11,14 @@ langs:
           - bin_730
           - bin_1460
           - bin_2920
-        user_count: 2400
-  ar:
-    min_rev_id: 33850000
-    groups:
-      newcomer:
-        experience_levels:
-          - bin_0
-        user_count: 1750
-  de:
-    min_rev_id: 187110000
-    groups:
-      newcomer:
-        experience_levels:
-          - bin_0
-        user_count: 1600
+        user_count: 2550
   pl:
     min_rev_id: 56333000
     groups:
       newcomer:
         experience_levels:
           - bin_0
-        user_count: 800
+        user_count: 950
       experienced:
         experience_levels:
           - bin_90
@@ -41,7 +27,21 @@ langs:
           - bin_730
           - bin_1460
           - bin_2920
-        user_count: 2400
+        user_count: 2550
+  ar:
+    min_rev_id: 33850000
+    groups:
+      newcomer:
+        experience_levels:
+          - bin_0
+        user_count: 1900
+  de:
+    min_rev_id: 187110000
+    groups:
+      newcomer:
+        experience_levels:
+          - bin_0
+        user_count: 3000
 
 
 dirs:
@@ -49,7 +49,8 @@ dirs:
   output: historical_output
   thankers: thankers_to_exclude
 
-experiment_start_date: 2019-07-03
-observation_back_days: 84
+experiment_start_date: 2019-07-29
+observation_back_days: 90
 min_edit_count: 4
 namespace_fn: non-talk
+# fast_refresh: 10
