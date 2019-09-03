@@ -347,7 +347,7 @@ class thankeeOnboarder():
         logging.info(f"already have {len(already_revs)} revs for user {refresh_user.user_id}")
 
         new_user_revs = get_quality_edits_of_users(small_user_df, lang, self.wmf_con,
-                                                   namespace_fn=get_namespace_fn(self.config['namespace_fn']),
+                                                   namespace_fn=self.namespace_fn,
                                                    exclusion_rev_ids=already_revs)
         # revisions needing getting = revs - already
         if len(new_user_revs) == 0:
