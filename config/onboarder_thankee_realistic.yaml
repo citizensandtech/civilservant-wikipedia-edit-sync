@@ -52,5 +52,6 @@ dirs:
 experiment_start_date: 2019-07-29
 observation_back_days: 90
 min_edit_count: 4
-namespace_fn: non-talk
 # fast_refresh: 10
+#namespace_fn: non-talk
+namespace_fn: non-talk-non-user

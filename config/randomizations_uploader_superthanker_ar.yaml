@@ -1,0 +1,12 @@
+project_dir: /data/project/thanker/
+randomizations_dir: .
+randomizations_file: SuperThankers-ar-2019.8.8.csv
+
+
+csv_db_map:
+  thing_id: anonymized_id
+
+
+cols_to_save:
+    - user_name
+    - lang
