@@ -408,7 +408,15 @@ class thankeeOnboarder():
             et_user = self.db_session.query(ExperimentThing).filter(ExperimentThing.experiment_id == -3) \
                 .filter(ExperimentThing.id == et_user_id).first()
 
-            candidate_has_et = True if et_user else False
+            candidate_has_et = None
+            if not et_user:
+                logging.info(f'Candidate {lang}:{refresh_user.user_name} has no ET')
+                candidate_has_et = False
+            elif et_user.randomization_arm == 0:
+                logging.info(f'Candidate {lang}:{refresh_user.user_name} has randomizaton arm 0')
+                candidate_has_et = False
+            else:
+                candidate_has_et = True
 
             if candidate_has_et:
                 logging.info(
@@ -418,7 +426,7 @@ class thankeeOnboarder():
                 except Exception as e:
                     logging.error(f"Couldn't refresh user lang:{lang} user{refresh_user.user_id}. Error: {e}")
             else:
-                logging.info(f'Candidate {lang}:{refresh_user.user_name} has not et, so skipping.')
+                logging.info(f'Candidate {lang}:{refresh_user.user_name} Is not being refreshed')
                 continue
 
     def output_population(self):

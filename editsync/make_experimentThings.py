@@ -81,7 +81,7 @@ class randomizationUploader():
                 randomization_arm = row["randomization_arm"]
                 assert randomization_arm in [0, 1], "randomization arm needs to be 0 or 1"
                 et_id = f'user_id:{row["lang"]}:{row["user_id"]}'
-                if randomization_arm == 0:
+                if randomization_arm == 0 and os.getenv('CS_WIKIPEDIA_NO_CONTROL_ETS', False):
                     logging.info(f"Not making an ET for {et_id} because their randomization arm is {randomization_arm}")
                     continue
                 experiment_id = -3
