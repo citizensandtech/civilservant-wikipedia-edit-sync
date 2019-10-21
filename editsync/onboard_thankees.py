@@ -412,9 +412,9 @@ class thankeeOnboarder():
             if not et_user:
                 logging.info(f'Candidate {lang}:{refresh_user.user_name} has no ET')
                 candidate_has_et = False
-            elif et_user.randomization_arm == 0:
-                logging.info(f'Candidate {lang}:{refresh_user.user_name} has randomizaton arm 0')
-                candidate_has_et = False
+            #elif et_user.randomization_arm == 0:
+            #    logging.info(f'Candidate {lang}:{refresh_user.user_name} has randomizaton arm 0')
+            #    candidate_has_et = False
             else:
                 candidate_has_et = True
 
