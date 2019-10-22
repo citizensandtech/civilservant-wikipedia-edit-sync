@@ -268,9 +268,9 @@ class thankeeOnboarder():
         time.sleep(10)
         num_quality_dfs = []
         for user_id in user_ids:
-            logging.debug(f'putting data back into num quality is {num_quality} for user {user_id}')
             num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
                 candidates.user_id == user_id).order_by(desc(candidates.created_at)).first().user_editcount_quality
+            logging.debug(f'putting data back into num quality is {num_quality} for user {user_id}')
             num_quality = float('nan') if num_quality is None else num_quality
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
