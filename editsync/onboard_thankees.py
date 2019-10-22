@@ -14,6 +14,7 @@ from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users,
 from civilservant.wikipedia.queries.users import get_active_users, get_specific_users, get_official_bots
 # from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
+from sqlalchemy import desc
 
 civilservant.logs.initialize()
 import logging
@@ -157,8 +158,12 @@ class thankeeOnboarder():
         target_user_count = inclusion_criteria['user_count']
 
         # get the known users so we don't save a candidate twice
-        known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
-            filter(candidates.user_experience_level.in_(group_experience_levels)).all()
+        # NOTE: I used to filter also on experience level, but I can't remember why. It's a problem now
+        # because when we do multiple rounds of onboarding I don't want the user to reappear in the next group.
+        # known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
+        #     filter(candidates.user_experience_level.in_(group_experience_levels)).all()
+        known_users = self.db_session.query(candidates).filter(candidates.lang == lang)\
+            .all()
         logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
 
         # get the included users to know if we have enough users for this
@@ -263,9 +268,9 @@ class thankeeOnboarder():
         time.sleep(10)
         num_quality_dfs = []
         for user_id in user_ids:
-            num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
-                candidates.user_id == user_id).one().user_editcount_quality
             logging.debug(f'putting data back into num quality is {num_quality} for user {user_id}')
+            num_quality = self.db_session.query(candidates).filter(candidates.lang == lang).filter(
+                candidates.user_id == user_id).order_by(desc(candidates.created_at)).first().user_editcount_quality
             num_quality = float('nan') if num_quality is None else num_quality
             user_thank_count_df = pd.DataFrame.from_dict({"user_editcount_quality": [num_quality],
                                                           'user_id': [user_id],
