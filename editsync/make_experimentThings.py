@@ -52,7 +52,7 @@ class randomizationUploader():
             row_map = {c: row[c] for c in cols_to_save}
             if thanker_thankee == 'superthankers':
                 experiment_id = -1
-                et_id = f'user_name:{row["lang"]}:{row["user_name"]}'
+                et_id = f'superthanker:{row["lang"]}:{row["user_name"]}'
                 randomization_condition = "superthanker"
                 randomization_arm = None
                 syncable = False
