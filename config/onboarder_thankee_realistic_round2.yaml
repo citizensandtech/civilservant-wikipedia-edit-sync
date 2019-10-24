@@ -6,21 +6,31 @@ langs:
       newcomer:
         experience_levels:
           - bin_0
-        user_count: 9500
+        user_count: 20000 # was 950 last round, trying to get as many as possible this round
+      experienced:
+        experience_levels:
+          - bin_90
+          - bin_180
+          - bin_365
+          - bin_730
+          - bin_1460
+          - bin_2920
+        user_count: 3200 # was 2550 last round trying to add 650.
+
   ar:
     min_rev_id: 37050000
     groups:
       newcomer:
         experience_levels:
           - bin_0
-        user_count: 19000
+        user_count: 20000 #was 1900 last round, trying to get as many as possible this round
   de:
     min_rev_id: 190780000
     groups:
       newcomer:
         experience_levels:
           - bin_0
-        user_count: 30000
+        user_count: 20000 #was 3000 last round, trying to get as many as possible this round
 
 
 dirs:
