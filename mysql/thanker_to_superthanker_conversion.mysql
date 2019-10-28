@@ -1,0 +1,42 @@
+-- set all thankers (and activity) to removed_dt
+set @stconversion_removed_dt = date(20200220);
+select @stconversion_removed_dt;
+
+with all_thankers as (select *
+                      from core_experiment_things
+                      where
+                        experiment_id = -1
+                        and randomization_condition = 'main'
+)
+#select count(*) from all_thankers;
+update core_experiment_things cet
+  join all_thankers at2
+    on cet.id = at2.id
+set cet.removed_dt = @stconversion_removed_dt;
+
+select count(*)
+from core_experiment_things
+where removed_dt = @stconversion_removed_dt;
+
+--
+update core_experiment_things cet
+set cet.removed_dt = NULL
+where cet.removed_dt = @stconversion_removed_dt;
+
+-- blow away the role field for converted users
+with converted_users as (select *
+                         from core_experiment_things
+                         where removed_dt = @stconversion_removed_dt),
+    converted_oauth as (
+      select
+        cou.id,
+        cou.username
+      from converted_users cu
+        join core_oauth_users cou
+          on concat(json_unquote(cu.metadata_json->'$.sync_object.lang'),
+                    ':',
+                    json_unquote(cu.metadata_json->'$.sync_object.user_name')) = cou.username)
+update core_oauth_users cou2
+  join converted_oauth co
+    on cou2.id = co.id
+set metadata_json = JSON_REMOVE(metadata_json, '$.role');

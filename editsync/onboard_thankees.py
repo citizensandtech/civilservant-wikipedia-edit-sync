@@ -162,7 +162,7 @@ class thankeeOnboarder():
         # because when we do multiple rounds of onboarding I don't want the user to reappear in the next group.
         # known_users = self.db_session.query(candidates).filter(candidates.lang == lang). \
         #     filter(candidates.user_experience_level.in_(group_experience_levels)).all()
-        known_users = self.db_session.query(candidates).filter(candidates.lang == lang)\
+        known_users = self.db_session.query(candidates).filter(candidates.lang == lang) \
             .all()
         logging.info(f"Group {lang}-{group_name} has {len(known_users)} known users.")
 
@@ -417,7 +417,7 @@ class thankeeOnboarder():
             if not et_user:
                 logging.info(f'Candidate {lang}:{refresh_user.user_name} has no ET')
                 candidate_has_et = False
-            #elif et_user.randomization_arm == 0:
+            # elif et_user.randomization_arm == 0:
             #    logging.info(f'Candidate {lang}:{refresh_user.user_name} has randomizaton arm 0')
             #    candidate_has_et = False
             else:
@@ -443,7 +443,8 @@ class thankeeOnboarder():
         out_f = os.path.join(out_base, out_fname)
 
         # now doing it the sqlalchemy way
-        all_included_users = self.db_session.query(candidates).filter(candidates.user_included == True)
+        all_included_users = self.db_session.query(candidates).filter(candidates.user_included==True) \
+            .filter(candidates.created_at > self.onboarding_latest_active_date)
 
         out_df = pd.read_sql(all_included_users.statement, all_included_users.session.bind)
         # now

@@ -28,6 +28,7 @@ can `git clone https://github.com/mitmedialab/civilservantlib-wikipedia` without
 - create user
 - grant privileges
 - `ALTER TABLE gratitude_edit_sync.edits CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;`
+- `ALTER TABLE gratitude_edit_sync.edits CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;`
 
 
 ## adding
