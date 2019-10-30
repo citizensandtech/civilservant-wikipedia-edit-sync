@@ -5,6 +5,13 @@
 -- set removed_dt on all uncompleted newcomers and their edits and their block pairs
 -- use special datestamp as identifier for now
 set @round1_removed_dt = date(20191025);
+
+update core_experiment_things
+set removed_dt=NULL
+where removed_dt=@round1_removed_dt;
+select count(*) from core_experiment_things where removed_dt=@round1_removed_dt;
+
+
 select @round1_removed_dt;
 -- set uncompleted thankees as removed
 with newcomer_uncompleted_thankees as (select
@@ -24,9 +31,8 @@ with newcomer_uncompleted_thankees as (select
                                              and randomization_arm = 1
                                              and removed_dt is NULL
                                              and cc.user_completed = 0
-                                             and cc.user_experience_level = 0
+                                             and cc.user_experience_level = '0'
                                              and cc.lang != 'en'
-                                             and cet.experiment_id=-3
                                              and cet.created_dt<date(20191001)
                                              and cet.created_dt>date(20190101)),
     all_thankees_control as (select

@@ -1,0 +1,87 @@
+-- mark users with less than 4 non-user space edits with removed dt
+with no_up as (select *
+               from core_edits
+               where not (instr(pageTitle, 'مستخدم:') or instr(pageTitle, 'کاربر:') or instr(pageTitle, 'Benutzer:') or
+                          instr(pageTitle, 'Benutzerin:') or instr(pageTitle, 'Wikipedysta:'))
+),
+    newcomers_no_up as (select
+                          et.metadata_json->'$.sync_object.lang'                  as lang,
+                          et.metadata_json->'$.sync_object.user_name'             as user_name,
+                          et.metadata_json->'$.sync_object.user_experience_level' as user_experience_level,
+                          et.id
+                        from core_experiment_things et
+                          left join no_up e
+                            on et.metadata_json->'$.sync_object.lang' = e.lang and
+                               et.metadata_json->'$.sync_object.user_name' = e.newRevUser
+                        where et.metadata_json->'$.sync_object.user_experience_level' = 0
+  ),
+    editcounts as (select
+                     lang,
+                     user_name,
+                     count(*) as num_edits
+                   from newcomers_no_up
+                   group by lang, user_name ),
+    too_few_edits_users as (select *
+                            from editcounts
+                            where num_edits < 4)
+update core_experiment_things et
+  join too_few_edits_users tf
+    on tf.lang = et.metadata_json->'$.sync_object.lang'
+       and tf.user_name = et.metadata_json->'$.sync_object.user_name'
+set removed_dt = current_timestamp();
+
+-- all things with : in the page title and removed_dt is null
+select metadata_json->'$.sync_object.pageTitle'
+from core_experiment_things
+where experiment_id = -10
+      and instr(metadata_json->'$.sync_object.pageTitle', ':')
+      and removed_dt is NULL
+      and metadata_json->'$.sync_object.lang' = 'pl';
+
+-- all things with : in the page title and removed_dt is null
+update core_experiment_things
+set removed_dt = current_timestamp()
+where experiment_id = -10
+      and (instr(metadata_json->'$.sync_object.pageTitle', 'مستخدم:')
+           or instr(metadata_json->'$.sync_object.pageTitle', 'کاربر:')
+           or instr(metadata_json->'$.sync_object.pageTitle', 'Benutzer:')
+           or instr(metadata_json->'$.sync_object.pageTitle', 'Benutzerin:')
+           or instr(metadata_json->'$.sync_object.pageTitle', 'Wikipedysta:')
+      );
+
+
+-- mark treatment pairs as removed where control is removed.
+with control_group_removed as (select
+                                 metadata_json->'$.sync_object.lang'       as lang,
+                                 metadata_json->'$.sync_object.user_name'  as user_name,
+                                 metadata_json->'$.randomization_block_id' as randomization_block_id,
+                                 randomization_condition,
+                                 randomization_arm
+                               from core_experiment_things
+                               where experiment_id = -3
+                                     and randomization_arm = 0
+                                     and randomization_condition = 'thankee'
+                                     and metadata_json->'$.sync_object.lang' != 'fa'
+                                     and removed_dt is not null),
+    control_treat_pairs as (select
+                              lang,
+                              user_name,
+                              randomization_block_id,
+                              control_group_removed.randomization_arm       as control_arm,
+                              control_group_removed.randomization_condition as control_condition,
+                              pair.randomization_arm                        as pair_arm,
+                              pair.randomization_condition                  as pair_condition,
+                              pair.removed_dt,
+                              pair.metadata_json->'$.sync_object.user_name' as pair_user,
+                              pair.metadata_json->'$.sync_object.lang'      as pair_lang
+                            from control_group_removed
+                              join core_experiment_things pair
+                                on control_group_removed.randomization_block_id =
+                                   pair.metadata_json->'$.randomization_block_id'
+                                   and control_group_removed.randomization_condition = pair.randomization_condition)
+update core_experiment_things cet
+  join control_treat_pairs tp
+    on cet.metadata_json->'$.sync_object.lang' = tp.lang
+       and cet.metadata_json->'$.sync_object.user_name' = tp.pair_user
+set cet.removed_dt = current_timestamp()
+where cet.removed_dt is null;
