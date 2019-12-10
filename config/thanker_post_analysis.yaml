@@ -1,0 +1,11 @@
+langs:
+  all: true
+
+dirs:
+  project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
+  randomization_output: randomization_output/all-thanker-randomization-final-20190729.csv
+  experiment_action_output: experiment_action_output/final_thanker_expreiment_actions.csv
+  post_experiment_analysis_post: post_experiment_analysis_post
+experiment_start_date: 2019-04-01
+observation_back_days: 56
+max_onboarders_to_check: 1

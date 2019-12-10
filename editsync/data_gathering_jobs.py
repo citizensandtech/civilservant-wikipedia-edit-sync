@@ -74,14 +74,43 @@ def add_total_recent_edits(df, lang, col_label, wmf_con, start_date, end_date):
                         start_date=start_date, end_date=end_date)
 
 
+def get_labour_hours_by_user_id_date_range(user_id, lang, wmf_con, start_date, end_date):
+    return get_edit_measure_by_user_id_date_range(edit_getter_fn=get_timestamps_within_range,
+                                                  timestamp_list_fn=calc_labour_hours,
+                                                  user_id=user_id,
+                                                  lang=lang,
+                                                  wmf_con=wmf_con,
+                                                  start_date=start_date,
+                                                  end_date=end_date)
+
+def get_edit_count_by_user_id_date_range(user_id, lang, wmf_con, start_date, end_date):
+    return get_edit_measure_by_user_id_date_range(edit_getter_fn=get_timestamps_within_range,
+                                                  timestamp_list_fn=len,
+                                                  user_id=user_id,
+                                                  lang=lang,
+                                                  wmf_con=wmf_con,
+                                                  start_date=start_date,
+                                                  end_date=end_date)
+
+def get_edit_measure_by_user_id_date_range(edit_getter_fn, timestamp_list_fn, lang, user_id, wmf_con, start_date, end_date):
+    ts_series = edit_getter_fn(lang, user_id, wmf_con, start_date, end_date)
+    ts_list = list(ts_series['rev_timestamp'])
+    return timestamp_list_fn(ts_list)
+
 def add_edits_fn(df, lang, col_label, wmf_con, timestamp_list_fn, edit_getter_fn, start_date=None, end_date=None):
     '''add the number of edits a user made within range'''
     edit_measure_dfs =[]
     user_ids = df[df['lang'] == lang]['user_id'].values
     for user_id in user_ids:
-        ts_series = edit_getter_fn(lang, user_id, wmf_con, start_date, end_date)
-        ts_list = list(ts_series['rev_timestamp'])
-        edit_measure_df = pd.DataFrame.from_dict({col_label: [timestamp_list_fn(ts_list)],
+        edit_measure = get_edit_measure_by_user_id_date_range(
+            edit_getter_fn=edit_getter_fn,
+            timestamp_list_fn=timestamp_list_fn,
+            lang=lang,
+            user_id=user_id,
+            wmf_con=wmf_con,
+            start_date=start_date,
+            end_date=end_date)
+        edit_measure_df = pd.DataFrame.from_dict({col_label: [edit_measure],
                                                       'user_id': [user_id],
                                                       'lang': [lang]}, orient='columns')
         edit_measure_dfs.append(edit_measure_df)
