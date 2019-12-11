@@ -115,7 +115,12 @@ class thankerOnboarder():
     def read_randomization_input(self, lang):
         f = os.path.join(self.config['dirs']['project'],
                          self.config['dirs']['randomization_output'])
-        return pd.read_csv(f, index_col=0)
+        account_map_f = os.path.join(self.config['dirs']['project'],
+                                     self.config['dirs']['account_map'])
+        randomizations = pd.read_csv(f)
+        account_map = pd.read_csv(account_map_f)
+        mapped = randomizations.merge(account_map, on='anonymized_id', how='left')
+        return mapped
 
     def read_experiment_action_input(self, lang):
         f = os.path.join(self.config['dirs']['project'],
@@ -200,9 +205,6 @@ class thankerOnboarder():
 
     def add_reverting_actions(self, df, lang):
         user_revert_dfs = []
-        schema = mwdb.Schema(
-            f"mysql+pymysql://{os.getenv('WMF_MYSQL_HOST')}:{os.getenv('WMF_MYSQL_PORT')}/{lang}wiki_p?read_default_file=~/replica.my.cnf",
-            only_tables=['revision'], pool_size=5, max_overflow=0)
         for user_id in df['user_id'].values:
             revert_q_attempt = 0
             revert_q_complete = False
@@ -401,6 +403,10 @@ class thankerOnboarder():
         if not os.path.exists(out_base):
             os.makedirs(out_base, exist_ok=True)
         out_f = os.path.join(out_base, out_fname)
+        #exclude personally identifiable information if setup
+        if 'pii_cols' in self.config:
+            non_pii_cols = [c for c in out_df.columns if c not in self.config['pii_cols']]
+            out_df = out_df[non_pii_cols]
         out_df.to_csv(out_f, index=False)
 
     def merge_historical_and_survey_data(self, lang):
@@ -437,15 +443,15 @@ class thankerOnboarder():
             columns={'min': 'treatment_start', 'max': 'treatment_end'}).reset_index()
         logging.info(f'there were {len(action_first_time)} users that had a first time')
         final_actions = randomizations.merge(action_first_time, on=['user_name', 'lang'], how='left')
-        final_actions['was_treated'] = pd.notnull(final_actions['treatment_start'])
-        logging.info(f'there were {len(final_actions[final_actions["was_treated"]])} treated users in experiment')
+        final_actions['complier_app'] = pd.notnull(final_actions['treatment_start'])
+        logging.info(f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
         assert len(randomizations) == len(final_actions)
         return final_actions
 
     def add_final_behavioural(self, lang, df, prepost):
         # problem now is that everyone has a different treatment_dt.
         logging.info(f'adding final behaviour')
-        if self.config['max_onboarders_to_check']:
+        if 'max_onboarders_to_check' in self.config:
             df = df[:self.config['max_onboarders_to_check']]
 
         logging.info(f'creating start and end 56 columns')
@@ -463,6 +469,19 @@ class thankerOnboarder():
             df[prepost_start_colname] = df['treatment_start_default'] - datetime.timedelta(
                 days=self.observation_back_days)
             df[prepost_end_colname] = df['treatment_start_default']
+
+        logging.info(f'adding reverts, shape of df is {df.shape}')
+
+        def get_num_reverts_row(row):
+            user_revert_df = self.get_reverting_actions_user_date(row['user_id'],
+                                                                  row['lang'],
+                                                                  row[prepost_start_colname],
+                                                                  row[prepost_end_colname])
+            return len(user_revert_df)
+
+        df[f'num_reverts_{self.observation_back_days}_{prepost}_treatment'] = \
+            df.apply(lambda row: get_num_reverts_row(row), axis=1)
+
 
         logging.info(f'adding blocks, shape of df is {df.shape}')
         bans_superset_df = self.make_bans_superset(df, min_start_date=df[prepost_start_colname].min(),
@@ -511,36 +530,60 @@ class thankerOnboarder():
 
         logging.info(f'adding wikithanks, shape of df is {df.shape}')
         df[f'wikithanks_{self.observation_back_days}_{prepost}_treatment'] = \
-            df.apply(lambda row: get_thanks_sending(
-                lang=row['lang'],
-                user_name=row['user_name'],
-                start_date=row[prepost_start_colname],
-                end_date=row[prepost_end_colname],
-                wmf_con=self.wmf_con
-            ), axis=1)
+            df.apply(lambda row: len(
+                get_thanks_sending(
+                    lang=row['lang'],
+                    user_name=row['user_name'],
+                    start_date=row[prepost_start_colname],
+                    end_date=row[prepost_end_colname],
+                    wmf_con=self.wmf_con
+                )), axis=1)
 
         logging.info(f'adding wikiloves, shape of df is {df.shape}')
+
+        def get_wikiloves_sending_row(row):
+            lang = row['lang']
+            if lang not in ('de', 'pl'):
+                wikiloves_sending = get_wikiloves_sending(
+                    lang=row['lang'],
+                    user_id=row['user_id'],
+                    start_date=row[prepost_start_colname],
+                    end_date=row[prepost_end_colname],
+                    wmf_con=self.wmf_con)
+                return len(wikiloves_sending)
+            else:
+                return float('nan')
+
         df[f'wikiloves_{self.observation_back_days}_{prepost}_treatment'] = \
-            df.apply(lambda row: get_wikiloves_sending(
-                lang=row['lang'],
-                user_id=row['user_id'],
-                start_date=row[prepost_start_colname],
-                end_date=row[prepost_end_colname],
-                wmf_con=self.wmf_con
-            ), axis=1)
+            df.apply(lambda row: get_wikiloves_sending_row(row), axis=1)
 
-        logging.info(f'adding reverts, shape of df is {df.shape}')
 
-        def get_num_reverts_row(row):
-            user_revert_df = self.get_reverting_actions_user_date(row['user_id'],
-                                                                  row['lang'],
-                                                                  row[prepost_start_colname],
-                                                                  row[prepost_end_colname])
-            return len(user_revert_df)
+        return df
 
-        df[f'num_reverts_{self.observation_back_days}_{prepost}_treatment'] = \
-            df.apply(lambda row: get_num_reverts_row(row), axis=1)
+    def add_post_survey(self, randomizations):
+        # load the post surveys
+        survey_dfs = []
+        for survey_fname in self.config['survey_files']:
+            survey_f = os.path.join(self.config['dirs']['project'], self.config['dirs']['survey_input'], survey_fname)
+            skiprows = [1, 2] if not survey_fname.startswith('fa') else None
+            survey_df = pd.read_csv(survey_f, header=0, skiprows=skiprows)
+            qualtrics_post_map = {k: v.replace('pre', 'post') for k, v in self.qualtrics_map.items()}
+            survey_df = survey_df.rename(columns=qualtrics_post_map)
 
+            def leading_int(s):
+                try:
+                    return int(s.split(' ')[0])
+                except (ValueError, AttributeError):
+                    return s
+
+            for col in qualtrics_post_map.values():
+                survey_df[col] = survey_df[col].apply(lambda s: leading_int(s))
+            survey_dfs.append(survey_df)
+        # put them in a single df
+        post_survey = pd.concat(survey_dfs)
+        post_survey = post_survey[list(qualtrics_post_map.values())]
+        # merge them with randomizations
+        df = randomizations.merge(post_survey, on='anonymized_id', how='left')
         return df
 
     def run(self, fn):
@@ -566,10 +609,15 @@ class thankerOnboarder():
                 final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
                 final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='post')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_post'], output_df_dict=None,
-                                  lang='all', fname_extra='post_treatment_vars', df_to_write=final_actions)
+                                  lang='all', fname_extra='post_treatment_vars', df_to_write=final_behavioural)
 
-                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
-                # final_behavioural_survey = self.add_final_survey(final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='pre')
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_post'], output_df_dict=None,
+                                  lang='all', fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
+
+            if fn == 'post_survey':
+                randomizations = self.read_randomization_input(lang)
+                final_behavioural_survey = self.add_post_survey(randomizations)
 
 
 @click.command()

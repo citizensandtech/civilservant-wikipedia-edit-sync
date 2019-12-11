@@ -3,9 +3,22 @@ langs:
 
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
-  randomization_output: randomization_output/all-thanker-randomization-final-20190729.csv
+  randomization_output: randomization_output/anonymous-all-thanker-randomization-final-20190729.csv
   experiment_action_output: experiment_action_output/final_thanker_expreiment_actions.csv
+  account_map: definitive/grat_thanker_account_mapping.csv
   post_experiment_analysis_post: post_experiment_analysis_post
+  survey_input: julia_input
+
+survey_files:
+  - pl_thanker_post_survey.csv
+  - de_thanker_post_survey.csv
+#  - fa_thanker_post_survey.csv
+
 experiment_start_date: 2019-04-01
 observation_back_days: 56
 max_onboarders_to_check: 1
+pii_cols:
+  - user_name
+  - user_id
+  - user_id_basic_data
+  - user_registration
