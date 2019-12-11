@@ -583,7 +583,10 @@ class thankerOnboarder():
         post_survey = pd.concat(survey_dfs)
         post_survey = post_survey[list(qualtrics_post_map.values())]
         # merge them with randomizations
-        df = randomizations.merge(post_survey, on='anonymized_id', how='left')
+        df = randomizations.merge(post_survey, on='anonymized_id', how='left', suffixes=("","__thanker_survey"))
+
+        df['complier.survey'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
+
         return df
 
     def run(self, fn):
@@ -607,17 +610,21 @@ class thankerOnboarder():
                 randomizations = self.read_randomization_input(lang)
                 experiment_actions = self.read_experiment_action_input(lang)
                 final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
-                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='post')
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_post'], output_df_dict=None,
-                                  lang='all', fname_extra='post_treatment_vars', df_to_write=final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                                  lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
-                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='pre')
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_post'], output_df_dict=None,
-                                  lang='all', fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
             if fn == 'post_survey':
+                #TODO change this from randomization to post_behavioural
                 randomizations = self.read_randomization_input(lang)
                 final_behavioural_survey = self.add_post_survey(randomizations)
+                #TODO add complier column
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_survey'], output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey', df_to_write=final_behavioural_survey)
 
 
 @click.command()
