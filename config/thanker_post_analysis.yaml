@@ -4,6 +4,8 @@ langs:
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
   randomization_output: randomization_output/anonymous-all-thanker-randomization-final-20190729.csv
+  randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191213.csv
+  randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191213.csv
   experiment_action_output: experiment_action_output/final_thanker_expreiment_actions.csv
   account_map: definitive/grat_thanker_account_mapping.csv
   post_experiment_analysis: post_experiment_analysis
@@ -13,13 +15,72 @@ dirs:
 survey_files:
   - pl_thanker_post_survey.csv
   - de_thanker_post_survey.csv
-#  - fa_thanker_post_survey.csv
+  - fa_thanker_post_survey.csv
 
 experiment_start_date: 2019-04-01
 observation_back_days: 56
-max_onboarders_to_check: 10
+max_onboarders_to_check: 1
 pii_cols:
   - user_name
   - user_id
   - user_id_basic_data
   - user_registration
+
+r_cols:
+  - anonymized.id
+  - lang
+  - user.editcount
+  - user.experience.level
+  - overall.exp
+  - has.email
+  - user.created
+  - account.age
+  - complier
+  - pre.monitoring.damaging.content
+  - pre.mentoring
+  - pre.newcomer.capability
+  - pre.newcomer.intent
+  - pre.emotionally.draining
+  - pre.feel.positive
+  - post.monitoring.damaging.content
+  - post.mentoring
+  - post.newcomer.capability
+  - post.newcomer.intent
+  - post.emotionally.draining
+  - post.feel.positive
+  - supportive.84.pre.treatment
+  - labor.hours.84.pre.treatment
+  - total.edits.84.pre.treatment
+  - num.reverts.84.pre.treatment
+  - project.talk.84.pre.treatment
+  - support.talk.84.pre.treatment
+  - wikithank.84.pre.treatment
+  - wikilove.84.pre.treatment
+  - block.actions.84.pre.treatment
+  - randomization.block.id
+  - randomization.block.size
+  - randomization.arm
+  - treatment.start
+  - treatment.end
+  - complier.app
+  - start.date.56.pre.treatment
+  - end.date.56.pre.treatment
+  - num.reverts.56.pre.treatment
+  - block.actions.56.pre.treatment
+  - labor.hours.56.pre.treatment
+  - total.edits.56.pre.treatment
+  - support.talk.56.pre.treatment
+  - project.talk.56.pre.treatment
+  - wikithanks.56.pre.treatment
+  - wikiloves.56.pre.treatment
+  - start.date.56.post.treatment
+  - end.date.56.post.treatment
+  - num.reverts.56.post.treatment
+  - block.actions.56.post.treatment
+  - labor.hours.56.post.treatment
+  - total.edits.56.post.treatment
+  - support.talk.56.post.treatment
+  - project.talk.56.post.treatment
+  - wikithanks.56.post.treatment
+  - wikiloves.56.post.treatment
+

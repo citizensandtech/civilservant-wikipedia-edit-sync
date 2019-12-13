@@ -112,14 +112,19 @@ class thankerOnboarder():
     def read_merged_survey_output(self, lang):
         self.read_midstage_dir(lang, mistage_dir='merged_output', dict_to_load=self.merged)
 
-    def read_randomization_input(self, lang):
+    def read_randomization_input(self, input_f):
+        """
+        read the file that contains the full randomizations.
+        :param input_f: key in the yaml config that points to a single CSV to read relative to the project dir
+        :return:
+        """
         f = os.path.join(self.config['dirs']['project'],
-                         self.config['dirs']['randomization_output'])
+                        self.config['dirs'][input_f])
         account_map_f = os.path.join(self.config['dirs']['project'],
                                      self.config['dirs']['account_map'])
         randomizations = pd.read_csv(f)
         account_map = pd.read_csv(account_map_f)
-        mapped = randomizations.merge(account_map, on='anonymized_id', how='left')
+        mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("","__account_map"))
         return mapped
 
     def read_experiment_action_input(self, lang):
@@ -403,8 +408,9 @@ class thankerOnboarder():
         if not os.path.exists(out_base):
             os.makedirs(out_base, exist_ok=True)
         out_f = os.path.join(out_base, out_fname)
-        #exclude personally identifiable information if setup
+        # exclude personally identifiable information if setup
         if 'pii_cols' in self.config:
+            logging.debug('excluding pii cols')
             non_pii_cols = [c for c in out_df.columns if c not in self.config['pii_cols']]
             out_df = out_df[non_pii_cols]
         out_df.to_csv(out_f, index=False)
@@ -444,7 +450,8 @@ class thankerOnboarder():
         logging.info(f'there were {len(action_first_time)} users that had a first time')
         final_actions = randomizations.merge(action_first_time, on=['user_name', 'lang'], how='left')
         final_actions['complier_app'] = pd.notnull(final_actions['treatment_start'])
-        logging.info(f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
+        logging.info(
+            f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
         assert len(randomizations) == len(final_actions)
         return final_actions
 
@@ -456,7 +463,7 @@ class thankerOnboarder():
 
         logging.info(f'creating start and end 56 columns')
         prepost_start_colname = f'start_date_{self.observation_back_days}_{prepost}_treatment'
-        prepost_end_colname = f'end_dt_{self.observation_back_days}_{prepost}_treatment'
+        prepost_end_colname = f'end_date_{self.observation_back_days}_{prepost}_treatment'
 
         if prepost == 'post':
             df['treatment_end_default'] = df['treatment_end'].apply(
@@ -481,7 +488,6 @@ class thankerOnboarder():
 
         df[f'num_reverts_{self.observation_back_days}_{prepost}_treatment'] = \
             df.apply(lambda row: get_num_reverts_row(row), axis=1)
-
 
         logging.info(f'adding blocks, shape of df is {df.shape}')
         bans_superset_df = self.make_bans_superset(df, min_start_date=df[prepost_start_colname].min(),
@@ -557,18 +563,20 @@ class thankerOnboarder():
         df[f'wikiloves_{self.observation_back_days}_{prepost}_treatment'] = \
             df.apply(lambda row: get_wikiloves_sending_row(row), axis=1)
 
-
         return df
 
     def add_post_survey(self, randomizations):
         # load the post surveys
         survey_dfs = []
         for survey_fname in self.config['survey_files']:
+            fa_survey = survey_fname.startswith('fa')
             survey_f = os.path.join(self.config['dirs']['project'], self.config['dirs']['survey_input'], survey_fname)
-            skiprows = [1, 2] if not survey_fname.startswith('fa') else None
+            skiprows = [1, 2] if not fa_survey else None
             survey_df = pd.read_csv(survey_f, header=0, skiprows=skiprows)
             qualtrics_post_map = {k: v.replace('pre', 'post') for k, v in self.qualtrics_map.items()}
             survey_df = survey_df.rename(columns=qualtrics_post_map)
+            if fa_survey:
+                survey_df['lang'] = 'fa'
 
             def leading_int(s):
                 try:
@@ -577,17 +585,28 @@ class thankerOnboarder():
                     return s
 
             for col in qualtrics_post_map.values():
+                # if col != 'lang':
                 survey_df[col] = survey_df[col].apply(lambda s: leading_int(s))
             survey_dfs.append(survey_df)
         # put them in a single df
         post_survey = pd.concat(survey_dfs)
         post_survey = post_survey[list(qualtrics_post_map.values())]
         # merge them with randomizations
-        df = randomizations.merge(post_survey, on='anonymized_id', how='left', suffixes=("","__thanker_survey"))
+        df = randomizations.merge(post_survey, on='anonymized_id', how='left', suffixes=("", "__thanker_survey"))
 
-        df['complier.survey'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
-
+        df['complier'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
         return df
+
+    def clean_post_survey(self, randomizations):
+        # R rename
+        py_r_columns = {k: k.replace('_','.') for k in randomizations.columns}
+        randomizations = randomizations.rename(columns=py_r_columns)
+        # output_columns
+        if self.config['r_cols']:
+            output_columns = [c for c in randomizations.columns if c in self.config['r_cols']]
+            randomizations = randomizations[output_columns]
+            randomizations = randomizations[self.config['r_cols']]
+        return randomizations
 
     def run(self, fn):
         for lang in self.langs:
@@ -607,9 +626,11 @@ class thankerOnboarder():
                 self.exclude_superthankers(lang)
                 self.write_excluded_superthankers_output(lang)
             if fn == 'post_analysis':
-                randomizations = self.read_randomization_input(lang)
+                randomizations = self.read_randomization_input('randomization_output')
                 experiment_actions = self.read_experiment_action_input(lang)
                 final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                                  lang=lang, fname_extra='treatment_date_check', df_to_write=final_actions)
                 final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
@@ -617,14 +638,21 @@ class thankerOnboarder():
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
-
             if fn == 'post_survey':
-                #TODO change this from randomization to post_behavioural
-                randomizations = self.read_randomization_input(lang)
+                randomizations = self.read_randomization_input('randomization_behavioral_output')
                 final_behavioural_survey = self.add_post_survey(randomizations)
-                #TODO add complier column
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis_survey'], output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey', df_to_write=final_behavioural_survey)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                                  output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
+                                  df_to_write=final_behavioural_survey)
+
+            if fn == 'post_clean':
+                randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
+                final_behavioural_survey_clean = self.clean_post_survey(randomizations)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                                  output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
+                                  df_to_write=final_behavioural_survey_clean)
 
 
 @click.command()
