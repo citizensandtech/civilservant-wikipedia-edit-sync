@@ -227,7 +227,7 @@ class thankerOnboarder():
                     user_reverts_df = pd.DataFrame.from_dict({"num_reverts_84_pre_treatment": [num_revertings], 'user_id': [user_id], 'lang': [lang]},
                                              orient='columns')
 
-                    user_revert_dfs.append(user_revert_df)
+                    user_revert_dfs.append(user_reverts_df)
                     revert_q_complete = True
                 except exc.OperationalError:
                     revert_q_attempt += 1
