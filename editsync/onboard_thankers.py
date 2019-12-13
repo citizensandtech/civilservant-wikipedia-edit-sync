@@ -23,7 +23,7 @@ from sqlalchemy import exc
 # noinspection PyUnresolvedReferences
 from data_gathering_jobs import add_labour_hours, add_total_recent_edits
 
-from editsync.data_gathering_jobs import get_labour_hours_by_user_id_date_range, get_edit_count_by_user_id_date_range
+from data_gathering_jobs import get_labour_hours_by_user_id_date_range, get_edit_count_by_user_id_date_range
 
 civilservant.logs.initialize()
 import logging
@@ -42,6 +42,7 @@ class thankerOnboarder():
         self.mwapi_sessions = {lang: self.make_mwapi_session(lang) for lang in self.langs}
         self.wmf_con = make_wmf_con()
         self.wmf_db = {}
+        self.wmf_db_hits = 0
         self.thankers = {}
         self.surveys = {}
         self.merged = {}
@@ -185,6 +186,7 @@ class thankerOnboarder():
 
     def get_wmf_db(self, lang):
         try:
+            self.wmf_db_hits += 1
             return self.wmf_db[lang]
         except KeyError:
             schema = mwdb.Schema(
@@ -195,13 +197,17 @@ class thankerOnboarder():
 
     def get_reverting_actions_user_date(self, user_id, lang, start_date, end_date):
         schema = self.get_wmf_db(lang)
+        schema.Session().expire_all()
         user_df = get_user_edits(lang, user_id, start_date, end_date,
                                  wmf_con=self.wmf_con)
+        self.wmf_con.dispose()
         rev_ids = user_df['rev_id'].values
+        if 'max_revert_revs_to_check' in self.config:
+            rev_ids = rev_ids[:self.config['max_revert_revs_to_check']]
         logging.info(
             f"User {lang}:{user_id}, has {len(rev_ids)} revs between {start_date} and {end_date}")
-        user_revert_df = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
-        return user_revert_df
+        num_revertings = get_num_revertings(lang, user_id, rev_ids, schema=schema, db_or_api='db')
+        return num_revertings
 
     def add_reverting_actions(self, df, lang):
         user_revert_dfs = []
@@ -210,9 +216,12 @@ class thankerOnboarder():
             revert_q_complete = False
             while revert_q_attempt < 5 and not revert_q_complete:
                 try:
-                    user_revert_df = self.get_reverting_actions_user_date(user_id=user_id, lang=lang,
+                    num_revertings = self.get_reverting_actions_user_date(user_id=user_id, lang=lang,
                                                                           start_date=self.observation_start_date,
                                                                           end_date=self.experiment_start_date)
+                    user_reverts_df = pd.DataFrame.from_dict({"num_reverts_84_pre_treatment": [num_revertings], 'user_id': [user_id], 'lang': [lang]},
+                                             orient='columns')
+
                     user_revert_dfs.append(user_revert_df)
                     revert_q_complete = True
                 except exc.OperationalError:
@@ -436,7 +445,7 @@ class thankerOnboarder():
 
     def merge_experiment_actions(self, lang, randomizations, experiment_actions):
         non_skip_in_time = experiment_actions[experiment_actions['action'] != 'skip']
-        # non_skip_in_time = non_skip_in_time[non_skip_in_time['created_dt']<datetime.datetime(2019,10,25)]
+        non_skip_in_time = non_skip_in_time[non_skip_in_time['created_dt']<datetime.datetime(2019,10,29)]
         action_first_time = non_skip_in_time.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
         action_first_time.columns = action_first_time.columns.get_level_values(1)
         action_first_time = action_first_time.rename(
@@ -473,11 +482,11 @@ class thankerOnboarder():
         logging.info(f'adding reverts, shape of df is {df.shape}')
 
         def get_num_reverts_row(row):
-            user_revert_df = self.get_reverting_actions_user_date(row['user_id'],
+            num_revertings = self.get_reverting_actions_user_date(row['user_id'],
                                                                   row['lang'],
                                                                   row[prepost_start_colname],
                                                                   row[prepost_end_colname])
-            return len(user_revert_df)
+            return num_revertings
 
         df[f'num_reverts_{self.observation_back_days}_{prepost}_treatment'] = \
             df.apply(lambda row: get_num_reverts_row(row), axis=1)
