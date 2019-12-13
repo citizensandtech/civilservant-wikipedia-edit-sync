@@ -38,7 +38,7 @@ dirs:
   output: historical_output
   thankers: thankers_to_exclude
 
-experiment_start_date: 2019-10-27
+experiment_start_date: 2019-10-28
 observation_back_days: 90
 min_edit_count: 4
 namespace_fn: non-talk-non-user
