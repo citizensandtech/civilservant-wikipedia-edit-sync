@@ -21,9 +21,8 @@ from civilservant.wikipedia.utils import get_namespace_fn, add_experience_bin
 from sqlalchemy import exc
 
 # noinspection PyUnresolvedReferences
-from data_gathering_jobs import add_labour_hours, add_total_recent_edits
-
-from data_gathering_jobs import get_labour_hours_by_user_id_date_range, get_edit_count_by_user_id_date_range
+from data_gathering_jobs import add_labour_hours, add_total_recent_edits, get_labour_hours_by_user_id_date_range, \
+    get_edit_count_by_user_id_date_range
 
 civilservant.logs.initialize()
 import logging
@@ -120,12 +119,12 @@ class thankerOnboarder():
         :return:
         """
         f = os.path.join(self.config['dirs']['project'],
-                        self.config['dirs'][input_f])
+                         self.config['dirs'][input_f])
         account_map_f = os.path.join(self.config['dirs']['project'],
                                      self.config['dirs']['account_map'])
         randomizations = pd.read_csv(f)
         account_map = pd.read_csv(account_map_f)
-        mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("","__account_map"))
+        mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("", "__account_map"))
         return mapped
 
     def read_experiment_action_input(self, lang):
@@ -224,8 +223,9 @@ class thankerOnboarder():
                     num_revertings = self.get_reverting_actions_user_date(user_id=user_id, lang=lang,
                                                                           start_date=self.observation_start_date,
                                                                           end_date=self.experiment_start_date)
-                    user_reverts_df = pd.DataFrame.from_dict({"num_reverts_84_pre_treatment": [num_revertings], 'user_id': [user_id], 'lang': [lang]},
-                                             orient='columns')
+                    user_reverts_df = pd.DataFrame.from_dict(
+                        {"num_reverts_84_pre_treatment": [num_revertings], 'user_id': [user_id], 'lang': [lang]},
+                        orient='columns')
 
                     user_revert_dfs.append(user_reverts_df)
                     revert_q_complete = True
@@ -451,7 +451,7 @@ class thankerOnboarder():
 
     def merge_experiment_actions(self, lang, randomizations, experiment_actions):
         non_skip_in_time = experiment_actions[experiment_actions['action'] != 'skip']
-        non_skip_in_time = non_skip_in_time[non_skip_in_time['created_dt']<datetime.datetime(2019,10,29)]
+        non_skip_in_time = non_skip_in_time[non_skip_in_time['created_dt'] < datetime.datetime(2019, 10, 29)]
         action_first_time = non_skip_in_time.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
         action_first_time.columns = action_first_time.columns.get_level_values(1)
         action_first_time = action_first_time.rename(
@@ -477,8 +477,9 @@ class thankerOnboarder():
         if prepost == 'post':
             df['treatment_end_default'] = df['treatment_end'].apply(
                 lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 3))
-            df[prepost_start_colname] = df['treatment_end_default']
-            df[prepost_end_colname] = df['treatment_end_default'] + datetime.timedelta(days=self.observation_back_days)
+            # adding 6 hours per outcome protocol
+            df[prepost_start_colname] = df['treatment_end_default'] + datetime.timedelta(hours=6)
+            df[prepost_end_colname] = df['treatment_end_default'] + datetime.timedelta(days=self.observation_back_days, hours=6)
         if prepost == 'pre':
             df['treatment_start_default'] = df['treatment_start'].apply(
                 lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 2))
@@ -607,8 +608,34 @@ class thankerOnboarder():
         return df
 
     def clean_post_survey(self, randomizations):
+        # experiment plan computations https://www.overleaf.com/project/5c376605f882d02f5b8c714a
+        # talk page edits, project edits, thanks.
+        randomizations['previous_supportive_actions'] = randomizations['support_talk_56_pre_treatment'] \
+                                                        + randomizations['project_talk_56_pre_treatment'] \
+                                                        + randomizations['wikithanks_56_pre_treatment']
+        randomizations['subsequent_supportive_actions'] = randomizations['support_talk_56_post_treatment'] \
+                                                          + randomizations['project_talk_56_post_treatment'] \
+                                                          + randomizations['wikithanks_56_post_treatment']
+        # $diff.supportive.actions
+        randomizations['diff_supportive_actions'] = randomizations['subsequent_supportive_actions'] \
+                                                    - randomizations['previous_supportive_actions']
+
+        # diff.positive.feeling
+        randomizations['previous_positive_feeling'] = randomizations['pre_feel_positive']
+        randomizations['subsequent_positive_feeling'] = randomizations['post_feel_positive']
+        randomizations['diff_positive_feeling'] = randomizations['subsequent_positive_feeling'] \
+                                                  - randomizations['previous_positive_feeling']
+        # previous labour previous.labor.hours
+        randomizations['previous_labor_hours'] = randomizations['labor_hours_56_pre_treatment']
+        # subsequent.labor.hours
+        randomizations['subsequent_labor_hours'] = randomizations['labor_hours_56_post_treatment']
+
+        # year.joined
+        randomizations['year_joined'] = randomizations['user_created'].apply(
+            lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').year)
+
         # R rename
-        py_r_columns = {k: k.replace('_','.') for k in randomizations.columns}
+        py_r_columns = {k: k.replace('_', '.') for k in randomizations.columns}
         randomizations = randomizations.rename(columns=py_r_columns)
         # output_columns
         if self.config['r_cols']:
@@ -643,25 +670,25 @@ class thankerOnboarder():
                 final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
-                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
+            final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
+            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                              lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
-            if fn == 'post_survey':
-                randomizations = self.read_randomization_input('randomization_behavioral_output')
-                final_behavioural_survey = self.add_post_survey(randomizations)
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
-                                  output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
-                                  df_to_write=final_behavioural_survey)
+        if fn == 'post_survey':
+            randomizations = self.read_randomization_input('randomization_behavioral_output')
+            final_behavioural_survey = self.add_post_survey(randomizations)
+            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                              output_df_dict=None,
+                              lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
+                              df_to_write=final_behavioural_survey)
 
-            if fn == 'post_clean':
-                randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
-                final_behavioural_survey_clean = self.clean_post_survey(randomizations)
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
-                                  output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
-                                  df_to_write=final_behavioural_survey_clean)
+        if fn == 'post_clean':
+            randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
+            final_behavioural_survey_clean = self.clean_post_survey(randomizations)
+            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                              output_df_dict=None,
+                              lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
+                              df_to_write=final_behavioural_survey_clean)
 
 
 @click.command()

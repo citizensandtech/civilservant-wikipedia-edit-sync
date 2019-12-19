@@ -33,9 +33,17 @@ r_cols:
   - user.experience.level
   - overall.exp
   - has.email
-  - user.created
+  - year.joined
   - account.age
   - complier
+  - previous.supportive.actions
+  - subsequent.supportive.actions
+  - diff.supportive.actions
+  - previous.positive.feeling
+  - subsequent.positive.feeling
+  - diff.positive.feeling
+  - previous.labor.hours
+  - subsequent.labor.hours
   - pre.monitoring.damaging.content
   - pre.mentoring
   - pre.newcomer.capability
