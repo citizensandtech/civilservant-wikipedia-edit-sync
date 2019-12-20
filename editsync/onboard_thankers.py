@@ -122,7 +122,7 @@ class thankerOnboarder():
                          self.config['dirs'][input_f])
         account_map_f = os.path.join(self.config['dirs']['project'],
                                      self.config['dirs']['account_map'])
-        randomizations = pd.read_csv(f)
+        randomizations = pd.read_csv(f, parse_dates=['treatment_end','treatment_start'])
         account_map = pd.read_csv(account_map_f)
         mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("", "__account_map"))
         return mapped
@@ -450,7 +450,8 @@ class thankerOnboarder():
         self.merged[lang] = merged_non_st
 
     def merge_experiment_actions(self, lang, randomizations, experiment_actions):
-        ea_df = experiment_actions[experiment_actions['created_dt'] < datetime.datetime(2019, 10, 29)]
+        # oct 28 was when the thanker->superthanker conversion happened.
+        ea_df = experiment_actions[experiment_actions['created_dt'] < datetime.datetime(2019, 10, 28)]
         non_skips = ea_df[ea_df['action'] != 'skip']
         skips = ea_df[ea_df['action'] == 'skip']
         action_first_time = non_skips.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
@@ -646,6 +647,12 @@ class thankerOnboarder():
         randomizations['year_joined'] = randomizations['user_created'].apply(
             lambda d: datetime.datetime.strptime(d, '%Y-%m-%d').year)
 
+        # time spent
+        randomizations['treatment_elapsed_seconds'] = randomizations.apply(lambda row:
+                                                                           (row['treatment_end']- \
+                                                                           row['treatment_start']).total_seconds()
+                                                                           , axis=1)
+
         # R rename
         py_r_columns = {k: k.replace('_', '.') for k in randomizations.columns}
         randomizations = randomizations.rename(columns=py_r_columns)
@@ -682,25 +689,25 @@ class thankerOnboarder():
                 final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
-            final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
-            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                              lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
-        if fn == 'post_survey':
-            randomizations = self.read_randomization_input('randomization_behavioral_output')
-            final_behavioural_survey = self.add_post_survey(randomizations)
-            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
-                              output_df_dict=None,
-                              lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
-                              df_to_write=final_behavioural_survey)
+            if fn == 'post_survey':
+                randomizations = self.read_randomization_input('randomization_behavioral_output')
+                final_behavioural_survey = self.add_post_survey(randomizations)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                                  output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
+                                  df_to_write=final_behavioural_survey)
 
-        if fn == 'post_clean':
-            randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
-            final_behavioural_survey_clean = self.clean_post_survey(randomizations)
-            self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
-                              output_df_dict=None,
-                              lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
-                              df_to_write=final_behavioural_survey_clean)
+            if fn == 'post_clean':
+                randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
+                final_behavioural_survey_clean = self.clean_post_survey(randomizations)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                                  output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
+                                  df_to_write=final_behavioural_survey_clean)
 
 
 @click.command()
