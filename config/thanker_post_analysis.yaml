@@ -2,7 +2,7 @@ langs:
   all: true
 
 dirs:
-  project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
+  project: /data/project/thanker
   randomization_output: randomization_output/anonymous-all-thanker-randomization-final-20190729.csv
   randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191213.csv
   randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191213.csv
@@ -19,7 +19,7 @@ survey_files:
 
 experiment_start_date: 2019-04-01
 observation_back_days: 56
-max_onboarders_to_check: 1
+#max_onboarders_to_check: 1
 pii_cols:
   - user_name
   - user_id
