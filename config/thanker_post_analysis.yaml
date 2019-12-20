@@ -71,6 +71,7 @@ r_cols:
   - treatment.start
   - treatment.end
   - complier.app
+  - num.thankees.skipped
   - start.date.56.pre.treatment
   - end.date.56.pre.treatment
   - num.reverts.56.pre.treatment

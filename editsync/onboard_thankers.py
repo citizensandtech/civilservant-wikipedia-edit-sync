@@ -450,17 +450,28 @@ class thankerOnboarder():
         self.merged[lang] = merged_non_st
 
     def merge_experiment_actions(self, lang, randomizations, experiment_actions):
-        non_skip_in_time = experiment_actions[experiment_actions['action'] != 'skip']
-        non_skip_in_time = non_skip_in_time[non_skip_in_time['created_dt'] < datetime.datetime(2019, 10, 29)]
-        action_first_time = non_skip_in_time.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
+        ea_df = experiment_actions[experiment_actions['created_dt'] < datetime.datetime(2019, 10, 29)]
+        non_skips = ea_df[ea_df['action'] != 'skip']
+        skips = ea_df[ea_df['action'] == 'skip']
+        action_first_time = non_skips.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
         action_first_time.columns = action_first_time.columns.get_level_values(1)
         action_first_time = action_first_time.rename(
             columns={'min': 'treatment_start', 'max': 'treatment_end'}).reset_index()
         logging.info(f'there were {len(action_first_time)} users that had a first time')
+
+        skip_counts = skips[['user_name', 'lang', 'action']].groupby(['lang', 'user_name']).agg(len)
+        skip_counts = skip_counts.rename(columns={'action': 'num_thankees_skipped'})
+        logging.info(f'there were {len(skip_counts)} users that had skips')
+
         final_actions = randomizations.merge(action_first_time, on=['user_name', 'lang'], how='left')
         final_actions['complier_app'] = pd.notnull(final_actions['treatment_start'])
+        final_actions = final_actions.merge(skip_counts, on=['user_name', 'lang'], how='left')
         logging.info(
             f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
+        final_actions['num_thankees_skipped'] = final_actions[['num_thankees_skipped', 'complier_app']] \
+            .apply(lambda row: 0 if row['complier_app'] and pd.isnull(row['num_thankees_skipped'])
+                                else row['num_thankees_skipped']
+                                           , axis=1)
         assert len(randomizations) == len(final_actions)
         return final_actions
 
@@ -479,7 +490,8 @@ class thankerOnboarder():
                 lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 3))
             # adding 6 hours per outcome protocol
             df[prepost_start_colname] = df['treatment_end_default'] + datetime.timedelta(hours=6)
-            df[prepost_end_colname] = df['treatment_end_default'] + datetime.timedelta(days=self.observation_back_days, hours=6)
+            df[prepost_end_colname] = df['treatment_end_default'] + datetime.timedelta(days=self.observation_back_days,
+                                                                                       hours=6)
         if prepost == 'pre':
             df['treatment_start_default'] = df['treatment_start'].apply(
                 lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 2))
