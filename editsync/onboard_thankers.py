@@ -122,7 +122,10 @@ class thankerOnboarder():
                          self.config['dirs'][input_f])
         account_map_f = os.path.join(self.config['dirs']['project'],
                                      self.config['dirs']['account_map'])
-        randomizations = pd.read_csv(f, parse_dates=['treatment_end','treatment_start'])
+        randomizations = pd.read_csv(f)
+        if 'treatment_end' in randomizations.columns:
+            randomizations = pd.read_csv(f, parse_dates=['treatment_end','treatment_start'])
+
         account_map = pd.read_csv(account_map_f)
         mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("", "__account_map"))
         return mapped

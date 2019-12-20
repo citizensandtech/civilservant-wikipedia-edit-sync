@@ -4,8 +4,8 @@ langs:
 dirs:
   project: /data/project/thanker
   randomization_output: randomization_output/anonymous-all-thanker-randomization-final-20190729.csv
-  randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191213.csv
-  randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191213.csv
+  randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191220.csv
+  randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191220.csv
   experiment_action_output: experiment_action_output/final_thanker_expreiment_actions.csv
   account_map: definitive/grat_thanker_account_mapping.csv
   post_experiment_analysis: post_experiment_analysis
@@ -72,6 +72,7 @@ r_cols:
   - treatment.end
   - complier.app
   - num.thankees.skipped
+  - treatment.elapsed.seconds
   - start.date.56.pre.treatment
   - end.date.56.pre.treatment
   - num.reverts.56.pre.treatment
