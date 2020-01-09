@@ -4,9 +4,11 @@ langs:
 dirs:
   project: /home/paprika/Tresors/CivilServant/projects/wikipedia-integration/gratitude-study/Data Drills/thanker_hardlaunch
   randomization_output: randomization_output/anonymous-all-thanker-randomization-final-20190729.csv
-  randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191220.csv
-  randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191220.csv
+  randomization_behavioral_output: post_experiment_analysis/all-pre_and_post_treatment_vars-20191221.csv
+  randomization_behavioral_survey_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey-20191223.csv
+  randomization_behavioral_survey_login_output: post_experiment_analysis/all-pre_and_post_treatment_vars_with_post_survey_logins-20200102.csv
   experiment_action_output: experiment_action_output/final_thanker_expreiment_actions.csv
+  oauth_login_output: experiment_action_output/final_oauth_logins.csv
   account_map: definitive/grat_thanker_account_mapping.csv
   post_experiment_analysis: post_experiment_analysis
   post_experiment_analysis_survey: post_experiment_analysis_survey
@@ -19,6 +21,8 @@ survey_files:
 
 experiment_start_date: 2019-04-01
 observation_back_days: 56
+treatment_start_default: 2019-08-02
+treatment_end_default: 2019-08-03
 #max_onboarders_to_check: 1
 pii_cols:
   - user_name
@@ -71,7 +75,11 @@ r_cols:
   - treatment.start
   - treatment.end
   - complier.app
+  - complier.app.logged.in
+  - complier.app.logged.in.latest.date
   - num.thankees.skipped
+  - num.thank.actions
+  - num.complete.activity.actions
   - treatment.elapsed.seconds
   - start.date.56.pre.treatment
   - end.date.56.pre.treatment

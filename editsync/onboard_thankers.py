@@ -124,13 +124,13 @@ class thankerOnboarder():
                                      self.config['dirs']['account_map'])
         randomizations = pd.read_csv(f)
         if 'treatment_end' in randomizations.columns:
-            randomizations = pd.read_csv(f, parse_dates=['treatment_end','treatment_start'])
+            randomizations = pd.read_csv(f, parse_dates=['treatment_end', 'treatment_start'])
 
         account_map = pd.read_csv(account_map_f)
         mapped = randomizations.merge(account_map, on='anonymized_id', how='left', suffixes=("", "__account_map"))
         return mapped
 
-    def read_experiment_action_input(self, lang):
+    def read_experiment_action_input(self):
         f = os.path.join(self.config['dirs']['project'],
                          self.config['dirs']['experiment_action_output'])
         return pd.read_csv(f, parse_dates=['created_dt'])
@@ -455,27 +455,39 @@ class thankerOnboarder():
     def merge_experiment_actions(self, lang, randomizations, experiment_actions):
         # oct 28 was when the thanker->superthanker conversion happened.
         ea_df = experiment_actions[experiment_actions['created_dt'] < datetime.datetime(2019, 10, 28)]
-        non_skips = ea_df[ea_df['action'] != 'skip']
-        skips = ea_df[ea_df['action'] == 'skip']
-        action_first_time = non_skips.groupby(['lang', 'user_name']).agg({'created_dt': [min, max]})
-        action_first_time.columns = action_first_time.columns.get_level_values(1)
-        action_first_time = action_first_time.rename(
+
+        def num_thankees_skipped(s):
+            return sum(s == 'skip')
+
+        def num_thank_actions(s):
+            return sum(s == 'thank')
+
+        def num_complete_activity_actions(s):
+            return sum(s == 'complete_activity')
+
+        user_actions = ea_df.groupby(['lang', 'user_name']).agg(
+            {'created_dt': [min, max], 'action': [num_thankees_skipped,
+                                                  num_thank_actions,
+                                                  num_complete_activity_actions]})
+        user_actions.columns = user_actions.columns.get_level_values(1)
+        user_actions = user_actions.rename(
             columns={'min': 'treatment_start', 'max': 'treatment_end'}).reset_index()
-        logging.info(f'there were {len(action_first_time)} users that had a first time')
+        logging.info(f'there were {len(user_actions)} users that had a first time')
 
-        skip_counts = skips[['user_name', 'lang', 'action']].groupby(['lang', 'user_name']).agg(len)
-        skip_counts = skip_counts.rename(columns={'action': 'num_thankees_skipped'})
-        logging.info(f'there were {len(skip_counts)} users that had skips')
+        randomizations_logins = self.add_post_logins(randomizations)
 
-        final_actions = randomizations.merge(action_first_time, on=['user_name', 'lang'], how='left')
-        final_actions['complier_app'] = pd.notnull(final_actions['treatment_start'])
-        final_actions = final_actions.merge(skip_counts, on=['user_name', 'lang'], how='left')
+        final_actions = randomizations_logins.merge(user_actions, on=['user_name', 'lang'], how='left')
+
+        def complier_app_row(row):
+            arm = row['randomization_arm']
+            if arm == 0:
+                return True if row['num_complete_activity_actions'] > 0 else False
+            elif arm == 1:
+                return True if row['num_thank_actions'] >= 4 else False
+
+        final_actions['complier_app'] = final_actions.apply(complier_app_row, axis=1)  # specific to the condition
         logging.info(
             f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
-        final_actions['num_thankees_skipped'] = final_actions[['num_thankees_skipped', 'complier_app']] \
-            .apply(lambda row: 0 if row['complier_app'] and pd.isnull(row['num_thankees_skipped'])
-                                else row['num_thankees_skipped']
-                                           , axis=1)
         assert len(randomizations) == len(final_actions)
         return final_actions
 
@@ -491,14 +503,18 @@ class thankerOnboarder():
 
         if prepost == 'post':
             df['treatment_end_default'] = df['treatment_end'].apply(
-                lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 3))
+                lambda dt: dt if pd.notnull(dt) else self.config['treatment_end_default'])
+            # hardcoded date to yaml config
             # adding 6 hours per outcome protocol
+            # hours can get loaded by yaml file
             df[prepost_start_colname] = df['treatment_end_default'] + datetime.timedelta(hours=6)
             df[prepost_end_colname] = df['treatment_end_default'] + datetime.timedelta(days=self.observation_back_days,
                                                                                        hours=6)
         if prepost == 'pre':
+            # rename treatment_start_default to "marker_date" or something more clear
             df['treatment_start_default'] = df['treatment_start'].apply(
-                lambda dt: dt if pd.notnull(dt) else datetime.datetime(2019, 8, 2))
+                lambda dt: dt if pd.notnull(dt) else self.config['treatment_start_default'])
+            # treatment_start_defaults get overwritten has no meaning for analysis.
             df[prepost_start_colname] = df['treatment_start_default'] - datetime.timedelta(
                 days=self.observation_back_days)
             df[prepost_end_colname] = df['treatment_start_default']
@@ -529,8 +545,6 @@ class thankerOnboarder():
                      axis=1)
 
         def get_edit_metric_row(row, edit_metric_fn):
-
-            # logging.debug(row)
             return edit_metric_fn(user_id=row['user_id'],
                                   lang=row['lang'],
                                   wmf_con=self.wmf_con,
@@ -620,8 +634,20 @@ class thankerOnboarder():
         # merge them with randomizations
         df = randomizations.merge(post_survey, on='anonymized_id', how='left', suffixes=("", "__thanker_survey"))
 
-        df['complier'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
+        # this could be less brittle
+        df['complier.survey'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
+        # TODO
+        # df['complier'] = df['complier.survey'] & df['complier.app']
         return df
+
+    def add_post_logins(self, randomizations):
+        logins_f = os.path.join(self.config['dirs']['project'],
+                                self.config['dirs']['oauth_login_output'])
+        logins = pd.read_csv(logins_f, parse_dates=['modified_dt', 'created_dt'])
+        logins = logins.rename(columns={'modified_dt': 'logged_in_latest_date',
+                                        'created_dt': 'logged_in_first_date'})
+        randomizations = randomizations.merge(logins, how='left', on=['user_name', 'lang'])
+        return randomizations
 
     def clean_post_survey(self, randomizations):
         # experiment plan computations https://www.overleaf.com/project/5c376605f882d02f5b8c714a
@@ -652,8 +678,8 @@ class thankerOnboarder():
 
         # time spent
         randomizations['treatment_elapsed_seconds'] = randomizations.apply(lambda row:
-                                                                           (row['treatment_end']- \
-                                                                           row['treatment_start']).total_seconds()
+                                                                           (row['treatment_end'] - \
+                                                                            row['treatment_start']).total_seconds()
                                                                            , axis=1)
 
         # R rename
@@ -683,9 +709,9 @@ class thankerOnboarder():
                 self.read_superthankner_input(lang)
                 self.exclude_superthankers(lang)
                 self.write_excluded_superthankers_output(lang)
-            if fn == 'post_analysis':
+            if fn == 'post_analysis':  # adding behaviour
                 randomizations = self.read_randomization_input('randomization_output')
-                experiment_actions = self.read_experiment_action_input(lang)
+                experiment_actions = self.read_experiment_action_input()
                 final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='treatment_date_check', df_to_write=final_actions)
@@ -704,8 +730,17 @@ class thankerOnboarder():
                                   lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
                                   df_to_write=final_behavioural_survey)
 
-            if fn == 'post_clean':
+            if fn == 'post_logins':
                 randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
+                final_behavioural_survey_login = self.add_post_logins(randomizations)
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
+                                  output_df_dict=None,
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_logins',
+                                  df_to_write=final_behavioural_survey_login)
+
+            if fn == 'post_clean':
+                '''this should be the last step'''
+                randomizations = self.read_randomization_input('randomization_behavioral_survey_login_output')
                 final_behavioural_survey_clean = self.clean_post_survey(randomizations)
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
                                   output_df_dict=None,
