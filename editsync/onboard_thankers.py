@@ -471,23 +471,31 @@ class thankerOnboarder():
                                                   num_complete_activity_actions]})
         user_actions.columns = user_actions.columns.get_level_values(1)
         user_actions = user_actions.rename(
-            columns={'min': 'treatment_start', 'max': 'treatment_end'}).reset_index()
+            columns={'min': 'first_action', 'max': 'last_action'}).reset_index()
         logging.info(f'there were {len(user_actions)} users that had a first time')
 
         randomizations_logins = self.add_post_logins(randomizations)
 
         final_actions = randomizations_logins.merge(user_actions, on=['user_name', 'lang'], how='left')
 
+        # final_actions['treatment_start'] = final_actions['first_action']
+        # final_actions['treatment_end'] = final_actions['last_action']
+        final_actions['treatment_start'] = final_actions['logged_in_first_date']
+        final_actions['treatment_end'] = final_actions['logged_in_latest_date']
+
         def complier_app_row(row):
             arm = row['randomization_arm']
+            # control activity
             if arm == 0:
                 return True if row['num_complete_activity_actions'] > 0 else False
+            # thanker treatment
             elif arm == 1:
                 return True if row['num_thank_actions'] >= 4 else False
 
         final_actions['complier_app'] = final_actions.apply(complier_app_row, axis=1)  # specific to the condition
         logging.info(
             f'there were {len(final_actions[final_actions["complier_app"]==True])} treated users in experiment')
+
         assert len(randomizations) == len(final_actions)
         return final_actions
 
@@ -635,9 +643,10 @@ class thankerOnboarder():
         df = randomizations.merge(post_survey, on='anonymized_id', how='left', suffixes=("", "__thanker_survey"))
 
         # this could be less brittle
-        df['complier.survey'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
+        df['complier_survey'] = pd.notnull(df['post_newcomer_capability']) & pd.notnull(df['pre_newcomer_capability'])
         # TODO
-        # df['complier'] = df['complier.survey'] & df['complier.app']
+        df['complier'] = df['complier_survey'] & df['complier_app']
+
         return df
 
     def add_post_logins(self, randomizations):
