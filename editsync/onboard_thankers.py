@@ -487,6 +487,7 @@ class thankerOnboarder():
             arm = row['randomization_arm']
             # control activity
             if arm == 0:
+                logging.debug(f'COMPLIER CALC: {row["num_complete_activity_actions"]}')
                 return True if row['num_complete_activity_actions'] > 0 else False
             # thanker treatment
             elif arm == 1:
@@ -510,8 +511,22 @@ class thankerOnboarder():
         prepost_end_colname = f'end_date_{self.observation_back_days}_{prepost}_treatment'
 
         if prepost == 'post':
-            df['treatment_end_default'] = df['treatment_end'].apply(
-                lambda dt: dt if pd.notnull(dt) else self.config['treatment_end_default'])
+            def treatment_default_end_date(row):
+                # did they even log in?
+                if pd.isnull(row['logged_in_first_date']):
+                    logging.debug(f'ENDDATE CALC:0 {row["user_name"]} never logged in')
+                    return self.config['treatment_end_default']
+                # did they complete the treatment? then that's it
+                elif row['complier_app']:
+                    logging.debug(f'ENDDATE CALC:1 {row["user_name"]} logged in and finished')
+                    return row['treatment_end']
+                # but it if they logged in and but didn't completed the treatment
+                else:
+                    assert row['complier_app'] == False
+                    logging.debug(f'ENDDATE CALC:2 {row["user_name"]} logged in but didnt finish')
+                    return row['logged_in_first_date'] + datetime.timedelta(hours=1)
+
+            df['treatment_end_default'] = df.apply(treatment_default_end_date, axis=1)
             # hardcoded date to yaml config
             # adding 6 hours per outcome protocol
             # hours can get loaded by yaml file
@@ -724,12 +739,12 @@ class thankerOnboarder():
                 final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='treatment_date_check', df_to_write=final_actions)
-                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='pre')
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                                  lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
-                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
+                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='post')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_behaviour, prepost='pre')
+                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
+                                  lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
 
             if fn == 'post_survey':
                 randomizations = self.read_randomization_input('randomization_behavioral_output')
