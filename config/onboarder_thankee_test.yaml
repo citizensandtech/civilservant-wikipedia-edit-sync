@@ -1,7 +1,7 @@
 # these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
 langs:
   fa:
-    min_rev_id: 26000000
+    min_rev_id: 27840000
     groups:
       newcomer:
         experience_levels:

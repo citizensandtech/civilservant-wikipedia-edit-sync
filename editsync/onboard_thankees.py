@@ -87,10 +87,10 @@ class thankeeOnboarder():
 
         active_users_bots = self.add_bots(active_users, lang)
 
-        logging.info(f"lenght of active users before bot check {len(active_users_bots)}")
+        logging.info(f"length of active users before bot check {len(active_users_bots)}")
         active_users_no_bots = active_users_bots[active_users_bots['is_official_bot'] == False]
         bots = active_users_bots[active_users_bots['is_official_bot'] == True]
-        logging.info(f"lenght of active users after bot check {len(active_users_no_bots)}")
+        logging.info(f"length of active users after bot check {len(active_users_no_bots)}")
 
         logging.info(f"active bots are {bots[['user_name','user_editcount']]}")
         # Subset to: - minimum edits
