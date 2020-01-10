@@ -156,6 +156,10 @@ class thankeeOnboarder():
         logging.info(f"Working on group {lang}-{group_name}.")
         group_experience_levels = inclusion_criteria['experience_levels']
         target_user_count = inclusion_criteria['user_count']
+        users_no_reg = super_group[pd.isnull(super_group['user_registration'])]
+        logging.info(f'there were {len(users_no_reg)} users without regisration data: {users_no_reg}')
+        super_group = super_group[pd.notnull(super_group['user_registration'])]
+        
 
         # get the known users so we don't save a candidate twice
         # NOTE: I used to filter also on experience level, but I can't remember why. It's a problem now
