@@ -736,13 +736,13 @@ class thankerOnboarder():
             if fn == 'post_analysis':  # adding behaviour
                 randomizations = self.read_randomization_input('randomization_output')
                 experiment_actions = self.read_experiment_action_input()
-                final_actions = self.merge_experiment_actions(lang, randomizations, experiment_actions)
+                final_behavioural = self.merge_experiment_actions(lang, randomizations, experiment_actions)
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                                  lang=lang, fname_extra='treatment_date_check', df_to_write=final_actions)
-                final_behavioural = self.add_final_behavioural(lang, final_actions, prepost='post')
+                                  lang=lang, fname_extra='treatment_date_check', df_to_write=final_behavioural)
+                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
-                final_behavioural = self.add_final_behavioural(lang, final_behaviour, prepost='pre')
+                final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='pre')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
                                   lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
 
