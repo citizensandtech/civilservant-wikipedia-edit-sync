@@ -412,20 +412,23 @@ class thankerOnboarder():
             self.write_output(output_dir=self.config['dirs']['superthanker_merged_output'], output_df_dict=None,
                               lang='all', fname_extra='merged_no_superthankers', df_to_write=final_df)
 
-    def write_output(self, output_dir, output_df_dict, lang, fname_extra, df_to_write=None):
+    def write_output(self, output_dir, output_df_dict, lang, fname_extra, df_to_write=None, add_no_date_ver=False):
         out_df = output_df_dict[lang] if df_to_write is None else df_to_write
-
-        out_fname = f"{lang}-{fname_extra}-{datetime.date.today().strftime('%Y%m%d')}.csv"
-        out_base = os.path.join(self.config['dirs']['project'], output_dir)
-        if not os.path.exists(out_base):
-            os.makedirs(out_base, exist_ok=True)
-        out_f = os.path.join(out_base, out_fname)
-        # exclude personally identifiable information if setup
-        if 'pii_cols' in self.config:
-            logging.debug('excluding pii cols')
-            non_pii_cols = [c for c in out_df.columns if c not in self.config['pii_cols']]
-            out_df = out_df[non_pii_cols]
-        out_df.to_csv(out_f, index=False)
+        date_variations = [datetime.date.today().strftime('%Y%m%d')]
+        if add_no_date_ver:
+            date_variations.append('')
+        for date_part in date_variations:
+            out_fname = f"{lang}-{fname_extra}{'-' if date_part else ''}{date_part}.csv"
+            out_base = os.path.join(self.config['dirs']['project'], output_dir)
+            if not os.path.exists(out_base):
+                os.makedirs(out_base, exist_ok=True)
+            out_f = os.path.join(out_base, out_fname)
+            # exclude personally identifiable information if setup
+            if 'pii_cols' in self.config:
+                logging.debug('excluding pii cols')
+                non_pii_cols = [c for c in out_df.columns if c not in self.config['pii_cols']]
+                out_df = out_df[non_pii_cols]
+            out_df.to_csv(out_f, index=False)
 
     def merge_historical_and_survey_data(self, lang):
         t = self.thankers[lang]
@@ -664,14 +667,6 @@ class thankerOnboarder():
 
         return df
 
-    def add_post_logins(self, randomizations):
-        logins_f = os.path.join(self.config['dirs']['project'],
-                                self.config['dirs']['oauth_login_output'])
-        logins = pd.read_csv(logins_f, parse_dates=['modified_dt', 'created_dt'])
-        logins = logins.rename(columns={'modified_dt': 'logged_in_latest_date',
-                                        'created_dt': 'logged_in_first_date'})
-        randomizations = randomizations.merge(logins, how='left', on=['user_name', 'lang'])
-        return randomizations
 
     def clean_post_survey(self, randomizations):
         # experiment plan computations https://www.overleaf.com/project/5c376605f882d02f5b8c714a
@@ -705,6 +700,11 @@ class thankerOnboarder():
                                                                            (row['treatment_end'] - \
                                                                             row['treatment_start']).total_seconds()
                                                                            , axis=1)
+
+        # some miscellaneous added columns
+        randomizations['complier_app_logged_in'] = pd.notnull(randomizations['logged_in_first_date'])
+        randomizations['complier_app_logged_in_latest_date'] = pd.notnull(randomizations['logged_in_latest_date'])
+
 
         # R rename
         py_r_columns = {k: k.replace('_', '.') for k in randomizations.columns}
@@ -741,10 +741,10 @@ class thankerOnboarder():
                                   lang=lang, fname_extra='treatment_date_check', df_to_write=final_behavioural)
                 final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='post')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
+                                  lang=lang, fname_extra='post_treatment_vars', df_to_write=final_behavioural)
                 final_behavioural = self.add_final_behavioural(lang, final_behavioural, prepost='pre')
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'], output_df_dict=None,
-                                  lang=lang, fname_extra='pre_treatment_vars', df_to_write=final_behavioural)
+                                  lang=lang, fname_extra='pre_and_post_treatment_vars', df_to_write=final_behavioural)
 
             if fn == 'post_survey':
                 randomizations = self.read_randomization_input('randomization_behavioral_output')
@@ -754,22 +754,16 @@ class thankerOnboarder():
                                   lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey',
                                   df_to_write=final_behavioural_survey)
 
-            if fn == 'post_logins':
-                randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
-                final_behavioural_survey_login = self.add_post_logins(randomizations)
-                self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
-                                  output_df_dict=None,
-                                  lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_logins',
-                                  df_to_write=final_behavioural_survey_login)
 
             if fn == 'post_clean':
                 '''this should be the last step'''
-                randomizations = self.read_randomization_input('randomization_behavioral_survey_login_output')
+                randomizations = self.read_randomization_input('randomization_behavioral_survey_output')
                 final_behavioural_survey_clean = self.clean_post_survey(randomizations)
                 self.write_output(output_dir=self.config['dirs']['post_experiment_analysis'],
                                   output_df_dict=None,
                                   lang=lang, fname_extra='pre_and_post_treatment_vars_with_post_survey_R_columns',
-                                  df_to_write=final_behavioural_survey_clean)
+                                  df_to_write=final_behavioural_survey_clean, add_no_date_ver=True)
+
 
 
 @click.command()
