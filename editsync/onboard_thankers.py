@@ -703,7 +703,7 @@ class thankerOnboarder():
 
         # some miscellaneous added columns
         randomizations['complier_app_logged_in'] = pd.notnull(randomizations['logged_in_first_date'])
-        randomizations['complier_app_logged_in_latest_date'] = pd.notnull(randomizations['logged_in_latest_date'])
+        randomizations['complier_app_logged_in_latest_date'] = randomizations['logged_in_latest_date']
 
 
         # R rename
