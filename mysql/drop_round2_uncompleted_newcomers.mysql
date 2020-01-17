@@ -1,0 +1,119 @@
+--
+--
+--
+-- begin drop round 2 procedure
+-- set removed_dt on all uncompleted newcomers and their edits and their block pairs
+-- use special datestamp as identifier for now
+set @round2_removed_dt = date(20200120);
+set @round2_user_created_start = date(20191028);
+set @round2_user_created_end = date(20200119);
+
+-- reset removed stamps if needed
+update core_experiment_things
+set removed_dt=NULL
+where removed_dt=@round2_removed_dt;
+select count(*) from core_experiment_things where removed_dt=@round2_removed_dt;
+
+
+select @round2_removed_dt;
+-- set uncompleted thankees as removed
+with newcomer_uncompleted_thankees as (select
+                                         cet.metadata_json->'$.sync_object.lang'       as lang,
+                                         cet.metadata_json->'$.sync_object.user_name'  as user_name,
+                                         cc.user_completed                             as user_completed,
+                                         cc.user_experience_level                      as user_experience_level,
+                                         cet.randomization_condition                   as randomization_condition,
+                                         cet.randomization_arm                         as randomization_arm,
+                                         cet.metadata_json->'$.randomization_block_id' as randomization_block_id,
+                                         cet.experiment_id                             as experiment_id
+                                       from core_experiment_things cet
+                                         join core_candidates cc
+                                           on cet.metadata_json->'$.sync_object.lang' = cc.lang
+                                              and cet.metadata_json->'$.sync_object.user_name' = cc.user_name
+                                       where experiment_id = -3
+                                             and randomization_arm = 1
+                                             and removed_dt is NULL
+                                             and cc.user_completed = 0
+                                             and cc.user_experience_level = '0'
+                                             and cc.lang != 'en'
+                                             and cet.created_dt<@round2_user_created_end
+                                             and cet.created_dt>@round2_user_created_start),
+    all_thankees_control as (select
+                               cet2.metadata_json->'$.sync_object.lang'       as lang,
+                               cet2.metadata_json->'$.sync_object.user_name'  as user_name,
+                               cet2.randomization_condition                   as randomization_condition,
+                               cet2.randomization_arm                         as randomization_arm,
+                               cet2.metadata_json->'$.randomization_block_id' as randomization_block_id,
+                               cet2.experiment_id                             as experiment_id
+                             from core_experiment_things cet2
+                             where experiment_id = -3
+                                   and randomization_arm = 0
+                                   and cet2.metadata_json->'$.sync_object.lang' != 'en'),
+    uncompleted_treat_control as (select
+                                    newcomer_uncompleted_thankees.lang,
+                                    newcomer_uncompleted_thankees.user_completed,
+                                    newcomer_uncompleted_thankees.user_experience_level,
+                                    newcomer_uncompleted_thankees.user_name              as treat_user_name,
+                                    newcomer_uncompleted_thankees.randomization_arm      as treat_arm,
+                                    newcomer_uncompleted_thankees.randomization_block_id as treat_block_id,
+                                    all_thankees_control.user_name                       as control_user_name,
+                                    all_thankees_control.randomization_arm               as control_arm,
+                                    all_thankees_control.randomization_block_id          as control_block_id
+                                  from newcomer_uncompleted_thankees
+                                    left join all_thankees_control
+                                      on newcomer_uncompleted_thankees.randomization_block_id =
+                                         all_thankees_control.randomization_block_id
+                                         and newcomer_uncompleted_thankees.lang = all_thankees_control.lang
+                                         and newcomer_uncompleted_thankees.experiment_id =
+                                             all_thankees_control.experiment_id),
+    uncompleted_treat_control_long as (select
+                                         lang,
+                                         user_completed,
+                                         user_experience_level,
+                                         treat_user_name as user_name,
+                                         treat_arm       as arm,
+                                         treat_block_id  as block_id
+                                       from uncompleted_treat_control
+                                       union all
+                                       select
+                                         lang,
+                                         user_completed,
+                                         user_experience_level,
+                                         control_user_name as user_name,
+                                         control_arm       as arm,
+                                         control_block_id  as block_id
+                                       from uncompleted_treat_control)
+update core_experiment_things cet3
+  join uncompleted_treat_control_long utcl
+    on cet3.metadata_json->'$.sync_object.lang' = utcl.lang
+       and cet3.metadata_json->'$.sync_object.user_name' = utcl.user_name
+set removed_dt = @round2_removed_dt;
+
+select count(*) from core_experiment_things where removed_dt=@round2_removed_dt;
+
+-- set edits of ETs with correct removed_dt to removed_dt
+with round2_removed_users as (select id, concat('user:',
+                                           json_unquote(metadata_json->'$.sync_object.lang'),
+                                           ':',
+                                           json_unquote(metadata_json->'$.sync_object.user_id')) as query_index
+                              from core_experiment_things
+                              where experiment_id = -3
+                                    and removed_dt = @round2_removed_dt),
+    round2_removed_user_edits as (select cet.id, cet.removed_dt, cet.experiment_id, cet.query_index
+                             from core_experiment_things cet
+                               join  round2_removed_users r1ru
+                                 on r1ru.query_index=cet.query_index
+                                )
+update core_experiment_things cet2
+  join round2_removed_user_edits r1rue
+  on cet2.id = r1rue.id
+set cet2.removed_dt=@round2_removed_dt;
+
+select count(*) from core_experiment_things where removed_dt=@round2_removed_dt;
+--
+--
+--
+-- end drop round 2 procedure
+
+
+
