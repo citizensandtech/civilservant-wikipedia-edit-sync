@@ -4,7 +4,7 @@
 -- begin drop round 2 procedure
 -- set removed_dt on all uncompleted newcomers and their edits and their block pairs
 -- use special datestamp as identifier for now
-set @round2_removed_dt = date(20200120);
+set @round2_removed_dt = date(20200122);
 set @round2_user_created_start = date(20191028);
 set @round2_user_created_end = date(20200119);
 

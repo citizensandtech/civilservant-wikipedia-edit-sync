@@ -1,7 +1,12 @@
 -- uncompleted users
 -- set removed dt
+-- for some reason pycharm doesnt like running this script dircetly from this file, but a copy/paste will do.
 set @skipped_too_often_removed_dt = date(20191115);
+set @skipped_too_often_removed_dt = date(20200206);
 set @too_many_skips = 2;
+
+select count(*) from core_experiment_things where removed_dt=@skipped_too_often_removed_dt;
+
 with uncompleted_thankees as (select
                                 cet.metadata_json -> '$.sync_object.lang'      as lang,
                                 cet.metadata_json -> '$.sync_object.user_name' as user_name,
@@ -42,6 +47,8 @@ with uncompleted_thankees as (select
   )
 update  core_experiment_things cet3
   join too_often_skipped_users tosu
-on cet3.metadata_json->'$.sync_object.user_name' = tosu.user_name
-and cet3.metadata_json->'$.sync_object.lang' = tosu.lang
+    on cet3.metadata_json->'$.sync_object.user_name' = tosu.user_name
+        and cet3.metadata_json->'$.sync_object.lang' = tosu.lang
 set removed_dt=@skipped_too_often_removed_dt;
+
+select count(*) from core_experiment_things where removed_dt=@skipped_too_often_removed_dt;
