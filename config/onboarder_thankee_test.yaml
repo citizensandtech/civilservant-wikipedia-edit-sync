@@ -1,6 +1,6 @@
 # these min revs are determined by finding the earliest revisions in 2019 https://quarry.wmflabs.org/query/34842
 langs:
-  fa:
+  ar:
     min_rev_id: 27840000
     groups:
       newcomer:
@@ -40,7 +40,7 @@ dirs:
 
 
 experiment_start_date: 2019-06-26
-max_onboarders_to_check: 80
+max_onboarders_to_check: 10
 min_edit_count: 4
 namespace_fn: non-talk
 observation_back_days: 84

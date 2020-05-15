@@ -12,8 +12,8 @@ import civilservant.logs
 from civilservant.util import PlatformType, ThingType
 from civilservant.wikipedia.queries.revisions import get_quality_edits_of_users, get_display_data
 from civilservant.wikipedia.queries.users import get_active_users, get_specific_users, get_official_bots
-# from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
-from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
+from editsync.data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
+# from data_gathering_jobs import add_num_quality_user, add_has_email, add_thanks_receiving, add_labour_hours
 from sqlalchemy import desc
 
 civilservant.logs.initialize()
@@ -49,6 +49,7 @@ class thankeeOnboarder():
         self.onboarding_latest_active_date = datetime.utcnow()
         self.populations = defaultdict(dict)
         self.namespace_fn = get_namespace_fn(config['namespace_fn'])
+        self.get_active_users_replacement = get_active_users_replacement
         self.get_active_users = get_active_users if not get_active_users_replacement else get_active_users_replacement
 
         if 'max_onboarders_to_check' in self.config.keys():
@@ -83,8 +84,6 @@ class thankeeOnboarder():
                                                  end_date=self.onboarding_latest_active_date,
                                                  min_rev_id=self.langs[lang]['min_rev_id'],
                                                  wmf_con=self.wmf_con)
-        #  active_users.to_csv(f'active_users.{lang}.csv')
-
         active_users_bots = self.add_bots(active_users, lang)
 
         logging.info(f"length of active users before bot check {len(active_users_bots)}")
@@ -113,6 +112,8 @@ class thankeeOnboarder():
                                                  lang=lang, group_name=group_name,
                                                  inclusion_criteria=inclusion_criteria)
 
+            if self.get_active_users_replacement:
+                continue
             ## Nota Bene. This is where things ge a bit wonky.
             # 1. at first I thought that I would store the user state in a candidates table, and in fact
             # that is useful for the sake of being able to multiprocess the quality-edits revision
@@ -159,7 +160,7 @@ class thankeeOnboarder():
         users_no_reg = super_group[pd.isnull(super_group['user_registration'])]
         logging.info(f'there were {len(users_no_reg)} users without regisration data: {users_no_reg}')
         super_group = super_group[pd.notnull(super_group['user_registration'])]
-        
+
 
         # get the known users so we don't save a candidate twice
         # NOTE: I used to filter also on experience level, but I can't remember why. It's a problem now
@@ -286,12 +287,16 @@ class thankeeOnboarder():
         return df
 
     def add_bots(self, df, lang):
-        bots = get_official_bots(lang=lang, wmf_con=self.wmf_con)
-        logging.info(f"Found {len(bots)} official bots on {lang}")
-        df = pd.merge(df, bots, on=['user_id', 'lang'], how='left')
-        df['is_official_bot'] = df['is_official_bot'].fillna(False)
-        df['is_official_bot'] = df['is_official_bot'].apply(bool)
-        return df
+        if self.get_active_users_replacement:
+            df['is_official_bot'] = False
+            return df
+        else:
+            bots = get_official_bots(lang=lang, wmf_con=self.wmf_con)
+            logging.info(f"Found {len(bots)} official bots on {lang}")
+            df = pd.merge(df, bots, on=['user_id', 'lang'], how='left')
+            df['is_official_bot'] = df['is_official_bot'].fillna(False)
+            df['is_official_bot'] = df['is_official_bot'].apply(bool)
+            return df
 
     def df_to_db(self, df):
         for i, row in df.iterrows():

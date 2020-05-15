@@ -13,11 +13,12 @@ from civilservant.wikipedia.utils import get_namespace_fn, calc_labour_hours
 from civilservant.wikipedia.queries.user_interactions import get_user_disablemail_properties, get_thanks_receiving
 
 
-def add_num_quality_user(user_id, lang, namespace_fn_name):
+def add_num_quality_user(user_id, lang, namespace_fn_name, num_quality_revisions_replacement=None):
     db_session = init_session()
     wmf_con = make_wmf_con()
     namespace_fn = get_namespace_fn(namespace_fn_name)
-    num_quality = num_quality_revisions(user_id=user_id, lang=lang, wmf_con=wmf_con,
+    quality_revisions = num_quality_revisions if num_quality_revisions_replacement is None else num_quality_revisions_replacement
+    num_quality = quality_revisions(user_id=user_id, lang=lang, wmf_con=wmf_con,
                                         namespace_fn=namespace_fn)
     user_rec = db_session.query(candidates).filter(candidates.lang == lang).filter(
         candidates.user_id == user_id).first()
