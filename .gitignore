@@ -12,3 +12,11 @@ Pipfile.lock
 \.idea/
 
 editsync/cache/ores_ndgf/
+
+editsync/logs/
+
+ipython/\.ipynb_checkpoints/
+
+logs/
+
+tests/htmlcov/
